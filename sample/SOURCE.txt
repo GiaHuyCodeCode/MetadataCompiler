@@ -1,0 +1,3016 @@
+SOURCE
+
+
+    '================================================================================
+    'アカウント（オーナー）_O
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 入居状況一覧 SET 入居状況一覧.[FLG] = '0';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 "
+    SQL = SQL & "SET 入居状況一覧.FLG = '1' "
+    SQL = SQL & "WHERE 入居状況一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 入居状況一覧 "
+    SQL = SQL & "   GROUP BY 家主No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー）_O → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Account SELECT "
+    SQL = SQL & "   'O_' & T.ID as ID , "
+    SQL = SQL & "   'Owner' as klass, "
+    SQL = SQL & "   T.[メールアドレス] as email, "
+    SQL = SQL & "   T.TEL1 as tel_fixed, "
+    SQL = SQL & "   '12' as closing_month, "
+    SQL = SQL & "   '31' as closing_day, "
+    SQL = SQL & "   T.家主No as legacy_id, "
+    SQL = SQL & "   'アカウント（オーナー）_O' as sheet "
+    SQL = SQL & "FROM 入居状況一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー）_O → 通常処理"
+    
+    '特殊処理
+    'name_family, name_family_kana, kind_id -> 個人・法人区分_0: "1"の場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('O_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.家主名, "
+    SQL = SQL & "   T.name_family_kana = T1.家主名カナ, "
+    SQL = SQL & "   T.kind_id = '10' "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '1'; "
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー）_O → 個人・法人区分_0: '1'の場合"
+    
+    'company_name, company_name_kana, kind_id -> 個人・法人区分_0: "2"の場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('O_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.家主名, "
+    SQL = SQL & "   T.company_name_kana = T1.家主名カナ, "
+    SQL = SQL & "   T.kind_id = '20' "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '2'; "
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー）_O → 個人・法人区分_0: '2'の場合"
+    
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+  
+    '================================================================================
+    'アカウント（新規オーナー）
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.[FLG] = '0';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T "
+    SQL = SQL & "SET T.FLG = '1' "
+    SQL = SQL & "WHERE Nz(T.部屋No, '') = ''; "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.部屋No "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "SET T1.FLG = '1' "
+    SQL = SQL & "WHERE Nz(T1.[貸主名],'') = '' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON T1.貸主No = T2.家主No "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 "
+    SQL = SQL & "SET 新規契約更新一覧.FLG = '1' "
+    SQL = SQL & "WHERE 新規契約更新一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 新規契約更新一覧 "
+    SQL = SQL & "   WHERE FLG = '0' "
+    SQL = SQL & "   GROUP BY 貸主No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    
+    log_write "set_account:アカウント（新規オーナー） → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Account SELECT "
+    SQL = SQL & "   'ON_' & T.ID as ID , "
+    SQL = SQL & "   'Owner' as klass, "
+    SQL = SQL & "   '12' as closing_month, "
+    SQL = SQL & "   '31' as closing_day, "
+    SQL = SQL & "   T.貸主No as legacy_id, "
+    SQL = SQL & "   'アカウント（新規オーナー）' as sheet "
+    SQL = SQL & "FROM 新規契約更新一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 通常処理"
+    
+    '特殊処理
+    'name_family, kind_id -> "会社"を含まない場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('ON_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.貸主名, "
+    SQL = SQL & "   T.kind_id = '10' "
+    SQL = SQL & "WHERE T1.[貸主名] NOT LIKE '%会社%'; "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → ""会社""を含まない場合"
+    
+    'company_name, kind_id -> "会社"を含む場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('ON_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.貸主名, "
+    SQL = SQL & "   T.kind_id = '20' "
+    SQL = SQL & "WHERE T1.[貸主名] LIKE '%会社%'; "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → ""会社""を含む場合"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+        
+
+    '================================================================================
+    'アカウント（入居者）_Y
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 入居状況一覧 SET 入居状況一覧.[FLG] = '0';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 "
+    SQL = SQL & "SET 入居状況一覧.FLG = '1' "
+    SQL = SQL & "WHERE 入居状況一覧.契約状況 NOT IN ('契約中','解約予定'); "
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者）_Y → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Account SELECT "
+    SQL = SQL & "   'Y_' & T.ID as ID , "
+    SQL = SQL & "   'Resident' as klass, "
+    SQL = SQL & "   'gmo002' as legacy_charge_user_id, "
+    SQL = SQL & "   'アカウント（入居者）_Y' as sheet "
+    SQL = SQL & "FROM 入居状況一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者）_Y → 通常処理"
+
+    '特殊処理
+    Dim con1 As String
+    Dim con2 As String
+    Dim con3 As String
+    con1 = "(T1.[個人・法人区分_33] = '個人' AND T1.[個人・法人区分_43] = '個人' AND T1.[契約者1入居有無] = '入居有り' AND T1.[契約者2入居有無] = '入居有り')"
+    con2 = "(T1.[契約者3入居有無] = '入居有り')"
+    con3 = "(T1.[契約者2入居有無] = '入居有り')"
+    
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('Y_' & T1.ID) "
+    SQL = SQL & "SET "
+    SQL = SQL & "   T.name_family = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[契約者名], "
+    SQL = SQL & con2 & "    , T1.[契約者名_55], "
+    SQL = SQL & con3 & "    , T1.[契約者名_45], "
+    SQL = SQL & "       True, T1.[契約者名] ), "
+    SQL = SQL & "   T.company_name = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[契約者名], "
+    SQL = SQL & con2 & "    , T1.[契約者名_55], "
+    SQL = SQL & con3 & "    , T1.[契約者名_45], "
+    SQL = SQL & "       True, T1.[契約者名] ), "
+    SQL = SQL & "   T.name_family_kana = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[契約者カナ], "
+    SQL = SQL & con2 & "    , T1.[契約者カナ_56], "
+    SQL = SQL & con3 & "    , T1.[契約者カナ_46], "
+    SQL = SQL & "       True, T1.[契約者カナ] ), "
+    SQL = SQL & "   T.company_name_kana = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[契約者カナ], "
+    SQL = SQL & con2 & "    , T1.[契約者カナ_56], "
+    SQL = SQL & con3 & "    , T1.[契約者カナ_46], "
+    SQL = SQL & "       True, T1.[契約者カナ] ), "
+    SQL = SQL & "   T.email = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[優先メールアドレス], "
+    SQL = SQL & con2 & "    , T1.[優先メールアドレス_58], "
+    SQL = SQL & con3 & "    , T1.[優先メールアドレス_48], "
+    SQL = SQL & "       True, T1.[優先メールアドレス] ), "
+    SQL = SQL & "   T.tel_fixed = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[TEL1_39], "
+    SQL = SQL & con2 & "    , T1.[TEL1_59], "
+    SQL = SQL & con3 & "    , T1.[TEL1_49], "
+    SQL = SQL & "       True, T1.[TEL1_39] ), "
+    SQL = SQL & "   T.tel_mobile = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[携帯1], "
+    SQL = SQL & con2 & "    , T1.[携帯1_60], "
+    SQL = SQL & con3 & "    , T1.[携帯1_50], "
+    SQL = SQL & "       True, T1.[携帯1] ), "
+    SQL = SQL & "   T.kind_id = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[個人・法人区分_33], "
+    SQL = SQL & con2 & "    , T1.[個人・法人区分_53], "
+    SQL = SQL & con3 & "    , T1.[個人・法人区分_43], "
+    SQL = SQL & "       True, T1.[個人・法人区分_33] ), "
+    SQL = SQL & "   T.gender_id = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[性別], "
+    SQL = SQL & con2 & "    , T1.[性別_61], "
+    SQL = SQL & con3 & "    , T1.[性別_51], "
+    SQL = SQL & "       True, T1.[性別] ), "
+    SQL = SQL & "   T.birthday = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[生年月日・設立日], "
+    SQL = SQL & con2 & "    , T1.[生年月日・設立日_62], "
+    SQL = SQL & con3 & "    , T1.[生年月日・設立日_52], "
+    SQL = SQL & "       True, T1.[生年月日・設立日] ), "
+    SQL = SQL & "   T.legacy_id = SWITCH( "
+    SQL = SQL & con1 & "    , T1.[契約者1No], "
+    SQL = SQL & con2 & "    , T1.[契約者3No], "
+    SQL = SQL & con3 & "    , T1.[契約者2No], "
+    SQL = SQL & "       True, T1.[契約者1No] ); "
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者）_Y → 特殊処理1"
+    
+    '上記の分岐完了後
+    '上記で出力したデータの個人・法人区分が"個人"の場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "SET T.company_name = '', "
+    SQL = SQL & "   T.company_name_kana = '', "
+    SQL = SQL & "   T.kind_id = '10' "
+    SQL = SQL & "WHERE T.ID LIKE '%Y_%' AND T.kind_id = '個人'; "
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者）_Y → 上記で出力したデータの個人・法人区分が'個人'の場合"
+    
+    '上記の分岐完了後
+    '上記で出力したデータの個人・法人区分が"法人"の場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "SET T.name_family = '', "
+    SQL = SQL & "   T.name_family_kana = '', "
+    SQL = SQL & "   T.kind_id = '20' "
+    SQL = SQL & "WHERE T.ID LIKE '%Y_%' AND T.kind_id = '法人'; "
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者）_Y → 上記で出力したデータの個人・法人区分が'法人'の場合"
+    
+    'tag
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('Y_' & T1.ID) "
+    SQL = SQL & "SET T.tag = T1.契約状況 "
+    SQL = SQL & "WHERE T1.[契約状況] = '解約予定'; "
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者）_Y → set tag"
+    
+    'dulicate legacy_id
+    SQL = ""
+    SQL = SQL & "DELETE FROM Account "
+    SQL = SQL & "WHERE ID LIKE 'Y_%' "
+    SQL = SQL & "AND ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID) "
+    SQL = SQL & "   FROM Account "
+    SQL = SQL & "   WHERE ID LIKE 'Y_%' "
+    SQL = SQL & "   GROUP BY legacy_id "
+    SQL = SQL & ") "
+
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者）_Y → delete duplicate"
+    
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+    
+    '================================================================================
+    'アカウント（新規入居者）_N
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.[FLG] = '1';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "LEFT JOIN 入居状況一覧 AS T2 ON (T1.物件No = T2.物件No) AND (T1.部屋No = T2.部屋No) AND (T1.契約者No = T2.契約者1No)"
+    SQL = SQL & "SET T1.FLG = '0' "
+    SQL = SQL & "WHERE T2.物件No IS NULL; "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 "
+    SQL = SQL & "SET 新規契約更新一覧.FLG = '1' "
+    SQL = SQL & "WHERE 新規契約更新一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 新規契約更新一覧 "
+    SQL = SQL & "   WHERE FLG = '0' "
+    SQL = SQL & "   GROUP BY 契約者No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    
+    log_write "set_account:アカウント（新規入居者）_N → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Account SELECT "
+    SQL = SQL & "   'N_' & T.ID as ID , "
+    SQL = SQL & "   'Resident' as klass, "
+    SQL = SQL & "   'gmo002' as legacy_charge_user_id, "
+    SQL = SQL & "   T.[契約者No] as legacy_id, "
+    SQL = SQL & "   'アカウント（新規入居者）_N' as sheet "
+    SQL = SQL & "FROM 新規契約更新一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者）_N → 通常処理"
+
+    '特殊処理
+    'name_family, company_name, kind_id -> "会社"が含まれていない場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('N_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.契約者名, "
+    SQL = SQL & "   T.kind_id = '10' "
+    SQL = SQL & "WHERE T1.[契約者名] NOT LIKE '%会社%';"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者）_N → '会社'が含まれていない場合"
+
+    'name_family, company_name, kind_id -> "会社"が含まれている場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('N_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.契約者名, "
+    SQL = SQL & "   T.kind_id = '20' "
+    SQL = SQL & "WHERE T1.[契約者名] LIKE '%会社%';"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者）_N → '会社'が含まれている場合"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+    
+    '================================================================================
+    'アカウント（既存入居者）_P
+    '================================================================================
+
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "入居者管理", "FLG", "TEXT(1)"
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+
+    '■FLGリセット
+    db.Execute "UPDATE 入居者管理 SET 入居者管理.[FLG] = '0';"
+    db.Execute "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.[FLG] = '0';"
+
+    '不要行を削除するため(FLG=1更新)
+    'アカウント（入居者）のシートで出力したlegacy_idのデータを除外したい
+    SQL = ""
+    SQL = SQL & "UPDATE 入居者管理 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 "
+    SQL = SQL & "ON T1.基幹入居者ID = Switch( "
+    SQL = SQL & "   ((T2.[契約者1入居有無] = '入居有り') AND (T2.[契約者2入居有無] = '入居有り') AND (T2.[個人・法人区分_33] = '個人') AND (T2.[個人・法人区分_43] = '個人')), T2.契約者1No, "
+    SQL = SQL & "   T2.[契約者3入居有無] = '入居有り', T2.契約者3No, "
+    SQL = SQL & "   T2.[契約者2入居有無] = '入居有り', T2.契約者2No, "
+    SQL = SQL & "   True, T2.契約者1No "
+    SQL = SQL & ") "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.部屋No AND T1.契約者No = T2.契約者1No "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 入居者管理 AS T1 "
+    SQL = SQL & "INNER JOIN 新規契約更新一覧 AS T2 ON T1.基幹入居者ID = T2.契約者No "
+    SQL = SQL & "SET T1.FLG = '2' "
+    SQL = SQL & "WHERE T1.FLG = '0' AND T2.FLG = '0' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 入居者管理 AS T1 "
+    SQL = SQL & "INNER JOIN 解約情報一覧 AS T2 ON T1.基幹入居者ID = T2.契約者No "
+    SQL = SQL & "SET T1.FLG = '3' "
+    SQL = SQL & "WHERE T1.FLG = '0' "
+    db.Execute SQL
+    
+    log_write "set_account:アカウント（既存入居者）_P → 不要行を削除するため(FLG=1更新)"
+
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Account SELECT "
+    SQL = SQL & "   'P_' & T.ID as ID , "
+    SQL = SQL & "   'Resident' as klass, "
+    SQL = SQL & "   IIF(T.[メールアドレス] = '-', NULL, T.[メールアドレス]) as email, "
+    SQL = SQL & "   IIF(T.[電話番号] = '-', NULL, T.[電話番号]) as tel_fixed, "
+    SQL = SQL & "   IIF(T.[携帯番号/SMS] = '-', NULL, T.[携帯番号/SMS]) as tel_mobile, "
+    SQL = SQL & "   IIF(T.[郵便番号] = '-', NULL, T.[郵便番号]) as zip_code, "
+    SQL = SQL & "   IIF(T.[都道府県] = '-', NULL, T.[都道府県]) as prefecture_code, "
+    SQL = SQL & "   IIF(T.[市区町村] = '-', NULL, T.[市区町村]) as city_code, "
+    SQL = SQL & "   IIF(T.[住所１] = '-', NULL, T.[住所１]) as address_1, "
+    SQL = SQL & "   IIF(T.[住所2] = '-', NULL, T.[住所2]) as address_2, "
+    SQL = SQL & "   IIF(T.[性別] = '-', NULL, T.[性別]) as gender_id, "
+    SQL = SQL & "   IIF(T.[生年月日] = '-', NULL, T.[生年月日]) as birthday, "
+    SQL = SQL & "   'gmo002' as legacy_charge_user_id, "
+    SQL = SQL & "   T.[基幹入居者ID] as legacy_id, "
+    SQL = SQL & "   'アカウント（既存入居者）_P' as sheet "
+    SQL = SQL & "FROM 入居者管理 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_account:オーナー→Accout設定SQL"
+
+    '特殊処理
+    'name_family, kind_id, name_family_kana, name_first, name_first_kana -> "個人"の場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 入居者管理 AS T1 ON T.ID = ('P_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.姓, "
+    SQL = SQL & "   T.kind_id = '10', "
+    SQL = SQL & "   T.name_family_kana = T1.[姓 (カナ)], "
+    SQL = SQL & "   T.name_first = IIF(T1.[名] = '-', NULL, T1.[名]), "
+    SQL = SQL & "   T.name_first_kana = IIF(T1.[名 (カナ)] = '-', NULL, T1.[名 (カナ)]) "
+    SQL = SQL & "WHERE T1.[個人／法人] = '個人';"
+    db.Execute SQL
+
+    'company_name, kind_id, company_name_kana -> "法人"の場合
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN 入居者管理 AS T1 ON T.ID = ('P_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.姓, "
+    SQL = SQL & "   T.kind_id = '20', "
+    SQL = SQL & "   T.company_name_kana = IIF(T1.[会社名 (カナ)] = '-', NULL, T1.[会社名 (カナ)]) "
+    SQL = SQL & "WHERE T1.[個人／法人] = '法人';"
+    db.Execute SQL
+
+    'tag
+    '解約情報にデータがある入居者は退去済
+    SQL = ""
+    SQL = SQL & "UPDATE (Account AS T "
+    SQL = SQL & "INNER JOIN 入居者管理 AS T1 ON T.ID = ('P_' & T1.ID)) "
+    SQL = SQL & "SET T.tag = SWITCH( "
+    SQL = SQL & "   T1.[タグ] = '解約予定', '退去済', "
+    SQL = SQL & "   T1.[タグ] = '退去済', '退去済', "
+    SQL = SQL & "   Nz(Replace(T1.[タグ], '-', ''), '') = '', '管理移行', "
+    SQL = SQL & "   True, NULL ) "
+    db.Execute SQL
+
+    '■項目削除
+    DeleteFieldInTable "入居者管理", "FLG"
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+    
+    'gender_id
+    SQL = ""
+    SQL = SQL & "UPDATE Account AS T "
+    SQL = SQL & "INNER JOIN T_MAP_gender_id AS M ON T.gender_id = M.性別 "
+    SQL = SQL & "SET T.gender_id = M.gender_id"
+    db.Execute SQL
+    
+    chk_required
+            
+    Debug.Print "account:" & Timer - t
+    log_write "set_account:out"
+
+
+    '================================================================================
+    '建物
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 入居状況一覧 SET 入居状況一覧.[FLG] = '0';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 "
+    SQL = SQL & "SET 入居状況一覧.FLG = '1' "
+    SQL = SQL & "WHERE 入居状況一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 入居状況一覧 "
+    SQL = SQL & "   GROUP BY 物件No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    log_write "set_building:建物 → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Building SELECT "
+    SQL = SQL & "   'B_' & T.ID as ID , "
+    SQL = SQL & "   T.物件名 as name, "
+    SQL = SQL & "   T.物件No as legacy_id, "
+    SQL = SQL & "   T.都道府県名 as prefecture_code, "
+    SQL = SQL & "   T.市区町村名 as city_code, "
+    SQL = SQL & "   T.町地域名 & T.丁番地名 & T.住所その他 as address, "
+    SQL = SQL & "   T.郵便番号 as zip_code, "
+    SQL = SQL & "   '建物' as sheet "
+    SQL = SQL & "FROM 入居状況一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_building:建物 → 通常処理"
+    
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+    
+    '================================================================================
+    '建物（新規）
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.[FLG] = '0';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 "
+    SQL = SQL & "SET 新規契約更新一覧.FLG = '1' "
+    SQL = SQL & "WHERE 新規契約更新一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 新規契約更新一覧 "
+    SQL = SQL & "   GROUP BY 物件No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+
+    log_write "set_building:建物（新規）　→ 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Building SELECT "
+    SQL = SQL & "   'BN_' & T.ID as ID , "
+    SQL = SQL & "   T.物件名 as name, "
+    SQL = SQL & "   T.物件No as legacy_id, "
+    SQL = SQL & "   '建物（新規）' as sheet "
+    SQL = SQL & "FROM 新規契約更新一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_building:建物（新規） → 通常処理"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+    
+    chk_required
+    
+    Debug.Print "building" & Timer - t
+    log_write "set_building:out"
+    
+End Sub
+
+Private Sub chk_required()
+    log_write "chk_required:in"
+
+    Dim t As Single
+    t = Timer
+    
+    Dim db As ADODB.Connection
+    Dim SQL As String
+    
+    Set db = CurrentProject.Connection
+    
+    '■nameがブランク
+    SQL = ""
+    SQL = SQL & "UPDATE Building "
+    SQL = SQL & "SET Building.[エラー内容] = Building.[エラー内容] & '/物件名がブランク', "
+    SQL = SQL & "Building.[エラー項目] = Building.[エラー項目] & '/name' "
+    SQL = SQL & "WHERE Nz(Building.name, '') = ''; "
+    db.Execute SQL
+    log_write "chk_required:name"
+    
+    
+    '■legacy_idがブランク
+    SQL = ""
+    SQL = SQL & "UPDATE Building "
+    SQL = SQL & "SET Building.[エラー内容] = Building.[エラー内容] & '/物件Noがブランク', "
+    SQL = SQL & "Building.[エラー項目] = Building.[エラー項目] & '/legacy_id' "
+    SQL = SQL & "WHERE Nz(Building.legacy_id, '') = ''; "
+    db.Execute SQL
+    log_write "chk_required:legacy_id"
+    
+    Debug.Print Timer - t
+    log_write "chk_required:out"
+    
+    
+     '================================================================================
+    '契約_K
+    '================================================================================
+    
+    '出力条件
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 入居状況一覧 SET 入居状況一覧.[FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 "
+    SQL = SQL & "SET 入居状況一覧.FLG = '1' "
+    SQL = SQL & "WHERE 契約状況 NOT IN ('契約中', '解約予定') "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 "
+    SQL = SQL & "SET 入居状況一覧.FLG = '1' "
+    SQL = SQL & "WHERE 入居状況一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 入居状況一覧 "
+    SQL = SQL & "   GROUP BY 物件No, 部屋No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    
+    log_write "set_contract:契約_K → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Contract SELECT "
+    SQL = SQL & "   'K_' & T.ID as ID , "
+    SQL = SQL & "   T.物件No & '-' & T.部屋No as legacy_property_id ,"
+    SQL = SQL & "   T.家主No as legacy_owner_id ,"
+    SQL = SQL & "   T.物件No as legacy_building_id ,"
+    SQL = SQL & "   T.初回契約始期 AS start_from, "
+    SQL = SQL & "   T.契約終期 AS end_until, "
+    SQL = SQL & "   T.家賃保証会社名 as corporate_guarantor_name, "
+    SQL = SQL & "   T.物件No & '-' & T.部屋No & '-' & T.契約者1No as legacy_id, "
+    SQL = SQL & "   T.[内　容(メールBOX)] as mail_box_no, "
+    SQL = SQL & "   T.電気業者TEL1 as electricity_contact_tel, "
+    SQL = SQL & "   T.上水道業者TEL1 as drink_water_contact_tel, "
+    SQL = SQL & "   T.排水業者TEL1 as drainage_contact_tel, "
+    SQL = SQL & "   T.ガス業者TEL1 as gas_contact_tel, "
+    SQL = SQL & "   T.その他業者1名 as internet_contact_name, "
+    SQL = SQL & "   T.その他業者1TEL1 as internet_contact_tel, "
+    SQL = SQL & "   T.ファイル名 as ファイル名, "
+    SQL = SQL & "   '契約_K' as sheet "
+    SQL = SQL & "FROM 入居状況一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_contract:契約_K → 通常処理"
+    
+    '特殊処理
+    'legacy_resident_id
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.legacy_resident_id = SWITCH ( "
+    SQL = SQL & "   (T1.[個人・法人区分_33] = '個人' AND T1.[個人・法人区分_43] = '個人' AND T1.[契約者1入居有無] = '入居有り' AND T1.[契約者2入居有無] = '入居有り'), T1.契約者1No, "
+    SQL = SQL & "   (T1.[契約者3入居有無] = '入居有り'), T1.契約者3No, "
+    SQL = SQL & "   (T1.[契約者2入居有無] = '入居有り'), T1.契約者2No, "
+    SQL = SQL & "   True, T1.契約者1No ) ;"
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: legacy_resident_id"
+    
+    'cohabitant_names
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.cohabitant_names = T1.契約者名_45 "
+    SQL = SQL & "WHERE T1.FLG = '0' AND (T1.[個人・法人区分_33] = '個人' AND T1.[個人・法人区分_43] = '個人' "
+    SQL = SQL & "   AND T1.[契約者1入居有無] = '入居有り' AND T1.[契約者2入居有無] = '入居有り'); "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: cohabitant_names"
+    
+    'end_date
+    SQL = ""
+    SQL = SQL & "UPDATE (Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID)) "
+    SQL = SQL & "INNER JOIN 解約情報一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.[部　屋] AND T1.契約者1No = T2.契約者No "
+    SQL = SQL & "SET T.end_date = T2.[受付・立会情報 解約日] "
+    SQL = SQL & "WHERE T1.FLG = '0'; "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: end_date"
+    
+    'kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = SWITCH ( "
+    SQL = SQL & "   (T1.[契約者3入居有無] = '入居有り'), '20', "
+    SQL = SQL & "   (T1.[契約者2入居有無] = '入居有り'), '20', "
+    SQL = SQL & "   (T1.[個人・法人区分_33] = '法人'), '20', "
+    SQL = SQL & "   True, '10' ); "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: kind_id"
+    
+    'legacy_contractor_id
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.legacy_contractor_id = SWITCH ( "
+    SQL = SQL & "   ((T1.[契約者3入居有無] = '入居有り' OR T1.[契約者2入居有無] = '入居有り') AND (T1.[個人・法人区分_33] = '法人')), T1.契約者1No, "
+    SQL = SQL & "   (Nz(T1.[契約者1入居有無], '') = ''), T1.契約者1No, "
+    SQL = SQL & "   True, NULL ); "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: legacy_contractor_id"
+    
+    'enable_support_24h
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.enable_support_24h = IIF( Nz(T1.[金額(税込額)(安心サービス24)], '') <> '' OR "
+    SQL = SQL & "                                Nz(T1.[金額(税込額)(24時間コールセンター)], '') <> '' OR "
+    SQL = SQL & "                                Nz(T1.[金額(税込額)(安心サポート)], '') <> '' OR "
+    SQL = SQL & "                                Nz(T1.[金額(税込額)(安心サポート（満革）)], '') <> '' , '1', NULL ); "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: enable_support_24h"
+    
+    'electricity_contact_name
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.electricity_contact_name = T1.[電気業者名] "
+    SQL = SQL & "WHERE T1.[電気業者名] NOT LIKE '%連絡不要%'; "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: electricity_contact_name"
+    
+    'drink_water_contact_name
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.drink_water_contact_name = T1.[上水道業者名] "
+    SQL = SQL & "WHERE T1.[上水道業者名] NOT LIKE '%連絡不要%'; "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: drink_water_contact_name"
+    
+    'gas_contact_name
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.gas_contact_name = T1.[ガス業者名] "
+    SQL = SQL & "WHERE (T1.[ガス業者名] NOT LIKE '%連絡不要%' AND T1.[ガス業者名] NOT LIKE '%田中総合燃料%'); "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: gas_contact_name"
+    
+    'drainage_contact_name
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) "
+    SQL = SQL & "SET T.drainage_contact_name = T1.[排水業者名] "
+    SQL = SQL & "WHERE (T1.[排水業者名] NOT LIKE '%連絡不要%' AND T1.[排水業者名] NOT LIKE '%汲み取り業者%'); "
+    db.Execute SQL
+    log_write "set_contract:契約_K → 特殊処理: drainage_contact_name"
+    
+    set_charge
+    log_write "set_contract:契約_K → set charge"
+    
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+    
+    '================================================================================
+    '新規契約_S
+    '================================================================================
+    
+    '出力条件
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.[FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T "
+    SQL = SQL & "SET T.FLG = '1' "
+    SQL = SQL & "WHERE Nz(T.部屋No, '') = ''; "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON (T1.物件No = T2.物件No) AND (T1.部屋No = T2.部屋No) AND (T1.契約者No = T2.契約者1No) "
+    SQL = SQL & "SET T1.FLG = '1'; "
+    db.Execute SQL
+    
+    log_write "set_contract:新規契約_S → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Contract SELECT "
+    SQL = SQL & "   'S_' & T.ID as ID , "
+    SQL = SQL & "   T.物件No & '-' & T.部屋No as legacy_property_id ,"
+    SQL = SQL & "   T.契約者No as legacy_resident_id ,"
+    SQL = SQL & "   T.貸主No as legacy_owner_id ,"
+    SQL = SQL & "   T.物件No as legacy_building_id ,"
+    SQL = SQL & "   T.契約始期 as start_from, "
+    SQL = SQL & "   T.契約終期 as end_until, "
+    SQL = SQL & "   '0' as charge_rent, "
+    SQL = SQL & "   T.家賃保証会社名 as corporate_guarantor_name, "
+    SQL = SQL & "   T.物件No & '-' & T.部屋No & '-' & T.契約者No as legacy_id, "
+    SQL = SQL & "   T.ファイル名 as ファイル名, "
+    SQL = SQL & "   '新規契約_S' as sheet "
+    SQL = SQL & "FROM 新規契約更新一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_contract:新規契約_S → 通常処理"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+    
+    '================================================================================
+    '既存契約_E
+    '================================================================================
+    
+    '出力条件
+    '■項目追加
+    AddNewFieldToTable "契約情報管理", "FLG", "TEXT(1)"
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 契約情報管理 SET 契約情報管理.[FLG] = '0' ;"
+    db.Execute "UPDATE 入居状況一覧 SET 入居状況一覧.[FLG] = '0' ;"
+    
+    '契約状況を"契約中"と"解約予定”のみにするため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 "
+    SQL = SQL & "SET 入居状況一覧.FLG = '1' "
+    SQL = SQL & "WHERE 入居状況一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 入居状況一覧 "
+    SQL = SQL & "   GROUP BY 物件No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 契約情報管理 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON T1.基幹建物ID = T2.物件No "
+    SQL = SQL & "SET T1.FLG = '1' "
+    SQL = SQL & "WHERE T2.FLG = '0' "
+    db.Execute SQL
+
+    SQL = ""
+    SQL = SQL & "UPDATE 契約情報管理 AS T1 "
+    SQL = SQL & "INNER JOIN 解約情報一覧 AS T2 ON T1.基幹契約ID = (T2.物件No & '-' & T2.[部　屋] & '-' & T2.契約者No) "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 契約情報管理 AS T1 "
+    SQL = SQL & "INNER JOIN 新規契約更新一覧 AS T2 ON T1.基幹契約ID = (T2.物件No & '-' & T2.[部屋No] & '-' & T2.契約者No) "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Contract SELECT "
+    SQL = SQL & "   'E_' & T.ID as ID , "
+    SQL = SQL & "   T.[基幹部屋ID] as legacy_property_id ,"
+    SQL = SQL & "   T.[基幹入居者ID] as legacy_resident_id ,"
+    SQL = SQL & "   T.[基幹オーナーID] as legacy_owner_id ,"
+    SQL = SQL & "   T.[基幹建物ID] as legacy_building_id ,"
+    SQL = SQL & "   IIF(IsDate(T.[賃貸開始]), Format(T.[賃貸開始], 'yyyy-mm-dd'), NULL) as start_from, "
+    SQL = SQL & "   IIF(IsDate(T.[賃貸終了]), Format(T.[賃貸終了], 'yyyy-mm-dd'), NULL) as end_until, "
+    SQL = SQL & "   Val(Replace(T.[賃料], ',', '')) as charge_rent, "
+    SQL = SQL & "   Val(Replace(T.[共益費], ',', '')) as charge_management, "
+    SQL = SQL & "   Val(Replace(T.[駐車場], ',', '')) as charge_parking, "
+    SQL = SQL & "   Val(Replace(T.[修繕積立金], ',', '')) as charge_accumulation, "
+    SQL = SQL & "   Val(Replace(T.[その他], ',', '')) as charge_additional, "
+    SQL = SQL & "   Val(Replace(T.[敷金], ',', '')) as charge_deposit, "
+    SQL = SQL & "   Val(Replace(T.[礼金], ',', '')) as charge_gratuity, "
+    SQL = SQL & "   Val(Replace(T.[保証料], ',', '')) as charge_bond, "
+    SQL = SQL & "   Val(Replace(T.[更新料], ',', '')) as months_of_rent_for_renewal, "
+    SQL = SQL & "   IIF(T.[連帯保証人] = '-', NULL, T.[連帯保証人]) as individual_guarantor_name, "
+    SQL = SQL & "   IIF(T.[保証会社] = '-', NULL, T.[保証会社]) as corporate_guarantor_name, "
+    SQL = SQL & "   IIF(T.[同居人] = '-', NULL, T.[同居人]) as cohabitant_names, "
+    SQL = SQL & "   T.[管理方法] as sublease, "
+    SQL = SQL & "   IIF(T.[備考] = '-', NULL, T.[備考]) as [note], "
+    SQL = SQL & "   IIF(IsDate(T.[入居日]), Format(T.[入居日], 'yyyy-mm-dd'), NULL) as property_checkup_from, "
+    SQL = SQL & "   T.[個人/法人] as kind_id, "
+    SQL = SQL & "   T.[基幹契約ID] as legacy_id, "
+    SQL = SQL & "   IIF(T.[24時間サポート] = '-', NULL, T.[24時間サポート]) as enable_support_24h, "
+    SQL = SQL & "   IIF(T.[解約予告期間] = '-', NULL, T.[解約予告期間]) as termination_by_day, "
+    SQL = SQL & "   IIF(T.[メールボックスNo_] = '-', NULL, T.[メールボックスNo_]) as mail_box_no, "
+    SQL = SQL & "   IIF(T.[【電気】連絡先名] = '-', NULL, T.[【電気】連絡先名]) as electricity_contact_name, "
+    SQL = SQL & "   IIF(T.[【電気】連絡先TEL] = '-', NULL, T.[【電気】連絡先TEL]) as electricity_contact_tel, "
+    SQL = SQL & "   IIF(T.[【水道(飲料水)】連絡先名] = '-', NULL, T.[【水道(飲料水)】連絡先名]) as drink_water_contact_name, "
+    SQL = SQL & "   IIF(T.[【水道(飲料水)】連絡先TEL] = '-', NULL, T.[【水道(飲料水)】連絡先TEL]) as drink_water_contact_tel, "
+    SQL = SQL & "   IIF(T.[【水道(排水)】連絡先名] = '-', NULL, T.[【水道(排水)】連絡先名]) as drainage_contact_name, "
+    SQL = SQL & "   IIF(T.[【水道(排水)】連絡先TEL] = '-', NULL, T.[【水道(排水)】連絡先TEL]) as drainage_contact_tel, "
+    SQL = SQL & "   IIF(T.[【ガス】連絡先名] = '-', NULL, T.[【ガス】連絡先名]) as gas_contact_name, "
+    SQL = SQL & "   IIF(T.[【ガス】連絡先TEL] = '-', NULL, T.[【ガス】連絡先TEL]) as gas_contact_tel, "
+    SQL = SQL & "   IIF(T.[【給湯】連絡先名] = '-', NULL, T.[【給湯】連絡先名]) as hot_water_contact_name, "
+    SQL = SQL & "   IIF(T.[【給湯】連絡先TEL] = '-', NULL, T.[【給湯】連絡先TEL]) as hot_water_contact_tel, "
+    SQL = SQL & "   IIF(T.[【インターネット】連絡先名] = '-', NULL, T.[【インターネット】連絡先名]) as internet_contact_name, "
+    SQL = SQL & "   IIF(T.[【インターネット】連絡先TEL] = '-', NULL, T.[【インターネット】連絡先TEL]) as internet_contact_tel, "
+    SQL = SQL & "   IIF(T.[【ケーブルテレビ】連絡先名] = '-', NULL, T.[【ケーブルテレビ】連絡先名]) as cable_tv_contact_name, "
+    SQL = SQL & "   IIF(T.[【ケーブルテレビ】連絡先TEL] = '-', NULL, T.[【ケーブルテレビ】連絡先TEL]) as cable_tv_contact_tel, "
+    SQL = SQL & "   T.[ファイル名] as ファイル名, "
+    SQL = SQL & "   '既存契約_E' as sheet "
+    SQL = SQL & "FROM [契約情報管理] AS T "
+    SQL = SQL & "WHERE T.FLG = '0'; "
+
+    db.Execute SQL
+    log_write "set_contract:既存契約_E → 通常処理"
+    
+    '特殊処理
+    'end_date
+    Dim targetDate As Date
+    Dim endOfPreviousMonth As Date
+    Dim sqlDate As String
+    
+    targetDate = DLookup("DATE_FROM", "T_BUF_DATE")
+    endOfPreviousMonth = DateSerial(Year(targetDate), Month(targetDate), 0)
+    sqlDate = Format(endOfPreviousMonth, "'yyyy-mm-dd'")
+    
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "SET T.end_date = " & sqlDate & " "
+    SQL = SQL & "WHERE T.ID LIKE 'E_%'; "
+    db.Execute SQL
+    log_write "set_contract:既存契約_E → 特殊処理: end_date"
+    
+    'legacy_contractor_id
+    SQL = ""
+    SQL = SQL & "UPDATE (Contract As T "
+    SQL = SQL & "INNER JOIN 契約情報管理 AS T1 ON T.ID = ('E_' & T1.ID)) "
+    SQL = SQL & "INNER JOIN 契約者情報管理 AS T2 ON T1.[契約者] = T2.[氏名/会社名] "
+    SQL = SQL & "SET T.legacy_contractor_id = T2.[契約者ID] ;"
+    db.Execute SQL
+    log_write "set_contract:既存契約_E → 特殊処理: legacy_contractor_id"
+    
+    'sublease
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 契約情報管理 AS T1 ON T.ID = ('E_' & T1.ID) "
+    SQL = SQL & "SET T.sublease = SWITCH ( "
+    SQL = SQL & "                   (T1.[管理方法] = 'サブリース'), '1', "
+    SQL = SQL & "                   (T1.[管理方法] = '管理委託'), '0', "
+    SQL = SQL & "                   True, NULL ); "
+    db.Execute SQL
+    log_write "set_contract:既存契約_E → 特殊処理: sublease"
+    
+    '■項目削除
+    DeleteFieldInTable "契約情報管理", "FLG"
+    DeleteFieldInTable "入居状況一覧", "FLG"
+    
+    '================================================================================
+    '解約_C
+    '================================================================================
+    
+    '出力条件
+    '■項目追加
+    AddNewFieldToTable "解約情報一覧", "FLG", "TEXT(1)"
+    AddNewFieldToTable "契約情報管理", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 解約情報一覧 SET 解約情報一覧.[FLG] = '0' ;"
+    db.Execute "UPDATE 契約情報管理 SET 契約情報管理.[FLG] = '1' ;"
+    
+    '契約状況を"契約中"と"解約予定”のみにするため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 解約情報一覧 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T2.[部屋No] = T1.[部　屋] AND T2.[契約者1No] = T1.[契約者No] "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+
+    SQL = ""
+    SQL = SQL & "UPDATE 契約情報管理 AS T1 "
+    SQL = SQL & "INNER JOIN 解約情報一覧 AS T2 ON T2.[物件No] & '-' & T2.[部　屋] & '-' & T2.[契約者No] = T1.基幹契約ID "
+    SQL = SQL & "SET T1.FLG = '0' "
+    SQL = SQL & "WHERE T2.FLG = '0'; "
+    db.Execute SQL
+    
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Contract SELECT "
+    SQL = SQL & "   'C_' & T.ID as ID , "
+    SQL = SQL & "   T.[基幹部屋ID] as legacy_property_id ,"
+    SQL = SQL & "   T.[基幹入居者ID] as legacy_resident_id ,"
+    SQL = SQL & "   T.[基幹オーナーID] as legacy_owner_id ,"
+    SQL = SQL & "   T.[基幹建物ID] as legacy_building_id ,"
+    SQL = SQL & "   IIF(IsDate(T.[賃貸開始]), Format(T.[賃貸開始], 'yyyy-mm-dd'), NULL) as start_from, "
+    SQL = SQL & "   IIF(IsDate(T.[賃貸終了]), Format(T.[賃貸終了], 'yyyy-mm-dd'), NULL) as end_until, "
+    SQL = SQL & "   Val(Replace(T.[賃料], ',', '')) as charge_rent, "
+    SQL = SQL & "   Val(Replace(T.[共益費], ',', '')) as charge_management, "
+    SQL = SQL & "   Val(Replace(T.[駐車場], ',', '')) as charge_parking, "
+    SQL = SQL & "   Val(Replace(T.[修繕積立金], ',', '')) as charge_accumulation, "
+    SQL = SQL & "   Val(Replace(T.[その他], ',', '')) as charge_additional, "
+    SQL = SQL & "   Val(Replace(T.[敷金], ',', '')) as charge_deposit, "
+    SQL = SQL & "   Val(Replace(T.[礼金], ',', '')) as charge_gratuity, "
+    SQL = SQL & "   Val(Replace(T.[保証料], ',', '')) as charge_bond, "
+    SQL = SQL & "   Val(Replace(T.[更新料], ',', '')) as months_of_rent_for_renewal, "
+    SQL = SQL & "   IIF(T.[連帯保証人] = '-', NULL, T.[連帯保証人]) as individual_guarantor_name, "
+    SQL = SQL & "   IIF(T.[保証会社] = '-', NULL, T.[保証会社]) as corporate_guarantor_name, "
+    SQL = SQL & "   IIF(T.[同居人] = '-', NULL, T.[同居人]) as cohabitant_names, "
+    SQL = SQL & "   T.[管理方法] as sublease, "
+    SQL = SQL & "   IIF(T.[備考] = '-', NULL, T.[備考]) as [note], "
+    SQL = SQL & "   IIF(IsDate(T.[入居日]), Format(T.[入居日], 'yyyy-mm-dd'), NULL) as property_checkup_from, "
+    SQL = SQL & "   T.[個人/法人] as kind_id, "
+    SQL = SQL & "   T.[基幹契約ID] as legacy_id, "
+    SQL = SQL & "   IIF(T.[24時間サポート] = '-', NULL, T.[24時間サポート]) as enable_support_24h, "
+    SQL = SQL & "   IIF(T.[解約予告期間] = '-', NULL, T.[解約予告期間]) as termination_by_day, "
+    SQL = SQL & "   IIF(T.[メールボックスNo_] = '-', NULL, T.[メールボックスNo_]) as mail_box_no, "
+    SQL = SQL & "   IIF(T.[【電気】連絡先名] = '-', NULL, T.[【電気】連絡先名]) as electricity_contact_name, "
+    SQL = SQL & "   IIF(T.[【電気】連絡先TEL] = '-', NULL, T.[【電気】連絡先TEL]) as electricity_contact_tel, "
+    SQL = SQL & "   IIF(T.[【水道(飲料水)】連絡先名] = '-', NULL, T.[【水道(飲料水)】連絡先名]) as drink_water_contact_name, "
+    SQL = SQL & "   IIF(T.[【水道(飲料水)】連絡先TEL] = '-', NULL, T.[【水道(飲料水)】連絡先TEL]) as drink_water_contact_tel, "
+    SQL = SQL & "   IIF(T.[【水道(排水)】連絡先名] = '-', NULL, T.[【水道(排水)】連絡先名]) as drainage_contact_name, "
+    SQL = SQL & "   IIF(T.[【水道(排水)】連絡先TEL] = '-', NULL, T.[【水道(排水)】連絡先TEL]) as drainage_contact_tel, "
+    SQL = SQL & "   IIF(T.[【ガス】連絡先名] = '-', NULL, T.[【ガス】連絡先名]) as gas_contact_name, "
+    SQL = SQL & "   IIF(T.[【ガス】連絡先TEL] = '-', NULL, T.[【ガス】連絡先TEL]) as gas_contact_tel, "
+    SQL = SQL & "   IIF(T.[【給湯】連絡先名] = '-', NULL, T.[【給湯】連絡先名]) as hot_water_contact_name, "
+    SQL = SQL & "   IIF(T.[【給湯】連絡先TEL] = '-', NULL, T.[【給湯】連絡先TEL]) as hot_water_contact_tel, "
+    SQL = SQL & "   IIF(T.[【インターネット】連絡先名] = '-', NULL, T.[【インターネット】連絡先名]) as internet_contact_name, "
+    SQL = SQL & "   IIF(T.[【インターネット】連絡先TEL] = '-', NULL, T.[【インターネット】連絡先TEL]) as internet_contact_tel, "
+    SQL = SQL & "   IIF(T.[【ケーブルテレビ】連絡先名] = '-', NULL, T.[【ケーブルテレビ】連絡先名]) as cable_tv_contact_name, "
+    SQL = SQL & "   IIF(T.[【ケーブルテレビ】連絡先TEL] = '-', NULL, T.[【ケーブルテレビ】連絡先TEL]) as cable_tv_contact_tel, "
+    SQL = SQL & "   T.[ファイル名] as ファイル名, "
+    SQL = SQL & "   '解約_C' as sheet "
+    SQL = SQL & "FROM [契約情報管理] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+
+    db.Execute SQL
+    log_write "set_contract:解約_C → 通常処理"
+    
+    '特殊処理
+    'end_date
+    SQL = ""
+    SQL = SQL & "UPDATE (Contract As T "
+    SQL = SQL & "INNER JOIN 契約情報管理 AS T1 ON T.ID = ('C_' & T1.ID)) "
+    SQL = SQL & "INNER JOIN 解約情報一覧 AS T2 ON T2.[物件No] & '-' & T2.[部　屋] & '-' & T2.[契約者No] = T1.基幹契約ID "
+    SQL = SQL & "SET T.end_date = IIF(IsDate(T2.[受付・立会情報 解約日]), Format(T2.[受付・立会情報 解約日], 'yyyy-mm-dd'), T2.[受付・立会情報 解約日]) "
+    SQL = SQL & "WHERE T2.FLG = '0'; "
+    db.Execute SQL
+    log_write "set_contract:解約_C → 特殊処理: end_date"
+    
+    'legacy_contractor_id
+    SQL = ""
+    SQL = SQL & "UPDATE (Contract As T "
+    SQL = SQL & "INNER JOIN 契約情報管理 AS T1 ON T.ID = ('C_' & T1.ID)) "
+    SQL = SQL & "INNER JOIN 契約者情報管理 AS T2 ON T1.[契約者] = T2.[氏名/会社名] "
+    SQL = SQL & "SET T.legacy_contractor_id = T2.[契約者ID] ;"
+    db.Execute SQL
+    log_write "set_contract:解約_C → 特殊処理: legacy_contractor_id"
+    
+    'sublease
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "INNER JOIN 契約情報管理 AS T1 ON T.ID = ('C_' & T1.ID) "
+    SQL = SQL & "SET T.sublease = SWITCH ( "
+    SQL = SQL & "                   (T1.[管理方法] = 'サブリース'), '1', "
+    SQL = SQL & "                   (T1.[管理方法] = '管理委託'), '0', "
+    SQL = SQL & "                   True, NULL ); "
+    db.Execute SQL
+    log_write "set_contract:解約_C → 特殊処理: sublease"
+    
+    '■項目削除
+    DeleteFieldInTable "解約情報一覧", "FLG"
+    DeleteFieldInTable "契約情報管理", "FLG"
+    
+    'kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE Contract As T "
+    SQL = SQL & "SET T.kind_id = SWITCH ( "
+    SQL = SQL & "                   (T.[kind_id] = '個人'), '10', "
+    SQL = SQL & "                   (T.[kind_id] = '法人'), '20', "
+    SQL = SQL & "                   True, T.[kind_id] ); "
+    db.Execute SQL
+    log_write "set_contract:特殊処理: kind_id"
+        
+    chk_required
+
+    Debug.Print "contract:" & Timer - t
+    log_write "set_contract:out"
+    
+    
+      '出力条件
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 入居状況一覧 SET 入居状況一覧.[FLG] = '1';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 as T "
+    SQL = SQL & "SET T.FLG = '0' "
+    SQL = SQL & "WHERE (T.[契約状況] = '契約中' OR T.[契約状況] = '解約予定') "
+    SQL = SQL & "   AND (T.[契約者3入居有無] = '入居有り' OR T.[契約者2入居有無] = '入居有り') "
+    SQL = SQL & "   AND (T.[個人・法人区分_33] = '法人'); "
+    db.Execute SQL
+
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 as T "
+    SQL = SQL & "SET T.FLG = '0' "
+    SQL = SQL & "WHERE (T.[契約状況] = '契約中' OR T.[契約状況] = '解約予定') "
+    SQL = SQL & "   AND Nz(T.[契約者1入居有無], '') = '' "
+    db.Execute SQL
+    
+    log_write "set_contractor:契約者 → 不要行を削除するため(FLG=1更新)"
+    
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Contractor SELECT "
+    SQL = SQL & "   'C_' & T.ID as ID , "
+    SQL = SQL & "   SWITCH( "
+    SQL = SQL & "       (T.[個人・法人区分_33] = '個人'), '10', "
+    SQL = SQL & "       (T.[個人・法人区分_33] = '法人'), '20', "
+    SQL = SQL & "       True, NULL ) as kind_id, "
+    SQL = SQL & "   T.[契約者名] as name, "
+    SQL = SQL & "   T.[優先メールアドレス] as email, "
+    SQL = SQL & "   T.[携帯1] as tel_mobile, "
+    SQL = SQL & "   T.[契約者1No] as legacy_id "
+    SQL = SQL & "FROM 入居状況一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 通常処理"
+    
+    '特殊処理
+    SQL = ""
+    SQL = SQL & "DELETE FROM Contractor "
+    SQL = SQL & "WHERE ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID) "
+    SQL = SQL & "   FROM Contractor "
+    SQL = SQL & "   GROUP BY legacy_id "
+    SQL = SQL & ")"
+
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 特殊処理"
+    
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+    
+    chk_required
+    
+    Debug.Print "building" & Timer - t
+    log_write "set_contractor:out"
+    
+    
+    
+       
+    '================================================================================
+    '部屋
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 入居状況一覧 SET 入居状況一覧.[FLG] = '0';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 入居状況一覧 "
+    SQL = SQL & "SET 入居状況一覧.FLG = '1' "
+    SQL = SQL & "WHERE 入居状況一覧.ID NOT IN ( "
+    SQL = SQL & "   SELECT MIN(ID)"
+    SQL = SQL & "   FROM 入居状況一覧 "
+    SQL = SQL & "   GROUP BY 物件No, 部屋No "
+    SQL = SQL & ");"
+    db.Execute SQL
+    log_write "set_property:部屋 → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Property SELECT "
+    SQL = SQL & "   'P_' & T.ID as ID , "
+    SQL = SQL & "   T.家主No as legacy_owner_id, "
+    SQL = SQL & "   T.物件No as legacy_building_id, "
+    SQL = SQL & "   T.部屋No as name, "
+    SQL = SQL & "   T.郵便番号 as zip_code, "
+    SQL = SQL & "   T.都道府県名 as prefecture_code, "
+    SQL = SQL & "   T.市区町村名 as city_code, "
+    SQL = SQL & "   T.町地域名 & T.丁番地名 & T.住所その他 as address_1, "
+    SQL = SQL & "   '10' as kind_id, "
+    SQL = SQL & "   T.物件No & '-' & T.部屋No as legacy_id, "
+    SQL = SQL & "   '部屋' as sheet "
+    SQL = SQL & "FROM 入居状況一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0' "
+    
+    db.Execute SQL
+    log_write "set_property:部屋 → 通常処理"
+    
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    '部屋（新規）
+    '================================================================================
+    
+    '出力条件
+    '重複削除
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.[FLG] = '0';"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.部屋No "
+    SQL = SQL & "SET T1.FLG = '1' "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "SET T1.FLG = '1' "
+    SQL = SQL & "WHERE Nz(T1.貸主No, '') = '' OR T1.貸主No = '0'; "
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE 新規契約更新一覧 AS T1 "
+    SQL = SQL & "SET T1.FLG = '1' "
+    SQL = SQL & "WHERE T1.部屋No IN ('駐車場','看板'); "
+    db.Execute SQL
+    
+    log_write "set_property:部屋（新規） → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理
+    SQL = ""
+    SQL = SQL & "INSERT INTO Property SELECT "
+    SQL = SQL & "   'PN_' & T.ID as ID , "
+    SQL = SQL & "   T.貸主No as legacy_owner_id, "
+    SQL = SQL & "   T.物件No as legacy_building_id, "
+    SQL = SQL & "   T.部屋No as name, "
+    SQL = SQL & "   '10' as kind_id, "
+    SQL = SQL & "   T.物件No & '-' & T.部屋No as legacy_id, "
+    SQL = SQL & "   '部屋（新規）' as sheet "
+    SQL = SQL & "FROM 新規契約更新一覧 AS T "
+    SQL = SQL & "WHERE T.FLG = '0'; "
+    
+    db.Execute SQL
+    log_write "set_property:部屋（新規） → 通常処理"
+    
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+    
+    chk_required
+    
+    Debug.Print "property" & Timer - t
+    log_write "set_property:out"
+    
+End Sub
+
+Private Sub chk_required()
+    log_write "chk_required:in"
+    
+    Dim t As Single
+    t = Timer
+    
+    Dim db As ADODB.Connection
+    Dim SQL As String
+    
+    Set db = CurrentProject.Connection
+    
+    
+    '■legacy_building_idがブランク
+    SQL = ""
+    SQL = SQL & "UPDATE Property "
+    SQL = SQL & "SET Property.[エラー内容] = Property.[エラー内容] & '/物件Noがブランク', "
+    SQL = SQL & "Property.[エラー項目] = Property.[エラー項目] & '/legacy_building_id' "
+    SQL = SQL & "WHERE Nz(Property.legacy_building_id, '') = '';"
+    db.Execute SQL
+    log_write "chk_required:legacy_building_id"
+    
+    
+    '■nameがブランク
+    SQL = ""
+    SQL = SQL & "UPDATE Property "
+    SQL = SQL & "SET Property.[エラー内容] = Property.[エラー内容] & '/部屋Noがブランク', "
+    SQL = SQL & "Property.[エラー項目] = Property.[エラー項目] & '/name' "
+    SQL = SQL & "WHERE Nz(Property.name, '') = '';"
+    db.Execute SQL
+    log_write "chk_required:name"
+    
+    Debug.Print Timer - t
+    log_write "chk_required:out"
+
+'================================================================================
+    ' アカウント（オーナー）
+    '================================================================================
+    ' Pre-check
+    If DCount("*", "[入居状況一覧]") <= 0 And DCount("*", "[新規契約更新一覧]") <= 0 And DCount("*", "[家主基本情報]") <= 0 And DCount("*", "[物件基本情報(入居者アプリ導入予定先）]") <= 0 Then
+        Exit Sub
+    End If
+    
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [入居状況一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE ID NOT IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [入居状況一覧] "
+    SQL = SQL & "    GROUP BY [家主No] "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, email, tel_fixed, kind_id, legacy_charge_user_id, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'O1_' & T.ID as ID , "
+    SQL = SQL & "   'Owner' as klass , "
+    SQL = SQL & "   T.[メールアドレス] as email , "
+    SQL = SQL & "   T.[TEL1] as tel_fixed , "
+    SQL = SQL & "   T.[個人・法人区分] as kind_id , "
+    SQL = SQL & "   'gmo001' as legacy_charge_user_id , "
+    SQL = SQL & "   T.[家主No] as legacy_id , "
+    SQL = SQL & "   'アカウント（オーナー）' as sheet "
+    SQL = SQL & "FROM [入居状況一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 通常処理"
+    
+    '特殊処理
+    'name_family
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[家主名] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '1' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: name_family"
+
+    'name_family_kana
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family_kana = T1.[家主名カナ] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '1' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: name_family_kana"
+
+    'company_name_kana
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.company_name_kana = T1.[家主名] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '2' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: company_name_kana"
+
+    'company_name
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.[家主名カナ] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '2' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: company_name"
+
+    'tel_mobile
+    SQL = ""
+    SQL = SQL & "UPDATE (account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) "
+    SQL = SQL & "INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] "
+    SQL = SQL & "SET T.tel_mobile = T2.[携帯1];"
+    
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: tel_mobile"
+
+    ' gender_id
+    SQL = ""
+    SQL = SQL & "UPDATE (account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) "
+    SQL = SQL & "INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] "
+    SQL = SQL & "SET T.gender_id = T2.[性別];"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: gender_id"
+    
+    ' birthday
+    SQL = ""
+    SQL = SQL & "UPDATE (account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) "
+    SQL = SQL & "INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] "
+    SQL = SQL & "SET T.birthday = T2.[生年月日];"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: birthday"
+
+    ' T_MAP for kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_kind_id_Account] AS M ON T.kind_id = M.[個人法人区分] "
+    SQL = SQL & "SET T.kind_id = M.[kind_id] ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: T_MAP mapping for kind_id"
+
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    ' アカウント（新規オーナー）
+    '================================================================================
+
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [新規契約更新一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE Nz([貸主名], '') = ''; "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 不要行を削除するため(FLG=1更新)"
+
+    '不要行を削除するため(FLG=2更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "LEFT JOIN [入居状況一覧] AS T "
+    SQL = SQL & "ON T.[家主No] = [新規契約更新一覧].[貸主No] "
+    SQL = SQL & "SET [新規契約更新一覧].[FLG] = '2' "
+    SQL = SQL & "WHERE [新規契約更新一覧].[FLG] = '0' "
+    SQL = SQL & "AND T.[家主No] IS NULL; "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 不要行を削除するため(FLG=2更新)"
+
+    '重複行を削除するため(FLG=3更新)
+    SQL = ""
+    SQL = "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET [FLG] = '0' "
+    SQL = SQL & "WHERE [FLG] = '2' "
+    SQL = SQL & "AND [ID] IN ( "
+    SQL = SQL & "   SELECT MIN(s2.[ID]) "
+    SQL = SQL & "   FROM [新規契約更新一覧] AS s2 "
+    SQL = SQL & "   GROUP By s2.[貸主No] "
+    SQL = SQL & "); "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 重複行を削除するため(FLG=3更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, legacy_charge_user_id, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'O2_' & T.ID as ID , "
+    SQL = SQL & "   'Owner' as klass , "
+    SQL = SQL & "   'gmo001' as legacy_charge_user_id , "
+    SQL = SQL & "   T.[貸主No] as legacy_id , "
+    SQL = SQL & "   'アカウント（新規オーナー）' as sheet "
+    SQL = SQL & "FROM [新規契約更新一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 通常処理"
+    
+    '特殊処理
+    'name_family
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[貸主名] "
+    SQL = SQL & "WHERE T1.[貸主名] NOT LIKE '*会社*' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 特殊処理: name_family"
+
+    'company_name
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.[貸主名] "
+    SQL = SQL & "WHERE T1.[貸主名] LIKE '*会社*' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 特殊処理: company_name"
+
+    'kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = IIF([貸主名] LIKE '*会社*', '20', '10') "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 特殊処理: kind_id"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+
+    '================================================================================
+    ' アカウント（入居者）
+    '================================================================================
+    
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [入居状況一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE [契約状況] NOT IN ('契約中', '契約中(他社)', '解約予定') ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, legacy_charge_user_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'R1_' & T.ID as ID , "
+    SQL = SQL & "   'Resident' as klass , "
+    SQL = SQL & "   'ohta-ff' as legacy_charge_user_id , "
+    SQL = SQL & "   'アカウント（入居者）' as sheet "
+    SQL = SQL & "FROM [入居状況一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 通常処理"
+    
+    '特殊処理
+    '契約者3
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[契約者名_12], "
+    SQL = SQL & "    T.name_family_kana = T1.[契約者カナ_13], "
+    SQL = SQL & "    T.email = T1.[優先メールアドレス_14], "
+    SQL = SQL & "    T.tel_fixed = T1.[TEL1_15], "
+    SQL = SQL & "    T.tel_mobile = T1.[携帯1_16], "
+    SQL = SQL & "    T.company_name_kana = T1.[契約者カナ_13], "
+    SQL = SQL & "    T.company_name = T1.[契約者名_12], "
+    SQL = SQL & "    T.kind_id = T1.[個人・法人区分_11], "
+    SQL = SQL & "    T.gender_id = T1.[性別_17], "
+    SQL = SQL & "    T.birthday = T1.[生年月日・設立日_18], "
+    SQL = SQL & "    T.legacy_id = T1.[契約者3No] "
+    SQL = SQL & "WHERE T1.[契約者3入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: 契約者3"
+
+    '契約者2
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[契約者名_4], "
+    SQL = SQL & "    T.name_family_kana = T1.[契約者カナ_5], "
+    SQL = SQL & "    T.email = T1.[優先メールアドレス_6], "
+    SQL = SQL & "    T.tel_fixed = T1.[TEL1_7], "
+    SQL = SQL & "    T.tel_mobile = T1.[携帯1_8], "
+    SQL = SQL & "    T.company_name_kana = T1.[契約者カナ_5], "
+    SQL = SQL & "    T.company_name = T1.[契約者名_4], "
+    SQL = SQL & "    T.kind_id = T1.[個人・法人区分_3], "
+    SQL = SQL & "    T.gender_id = T1.[性別_9], "
+    SQL = SQL & "    T.birthday = T1.[生年月日・設立日_10], "
+    SQL = SQL & "    T.legacy_id = T1.[契約者2No] "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約者2入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: 契約者2"
+
+    '契約者1
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[契約者名], "
+    SQL = SQL & "    T.name_family_kana = T1.[契約者カナ], "
+    SQL = SQL & "    T.email = T1.[優先メールアドレス], "
+    SQL = SQL & "    T.tel_fixed = T1.[TEL1_2], "
+    SQL = SQL & "    T.tel_mobile = T1.[携帯1], "
+    SQL = SQL & "    T.company_name_kana = T1.[契約者カナ], "
+    SQL = SQL & "    T.company_name = T1.[契約者名], "
+    SQL = SQL & "    T.kind_id = T1.[個人・法人区分_1], "
+    SQL = SQL & "    T.gender_id = T1.[性別], "
+    SQL = SQL & "    T.birthday = T1.[生年月日・設立日], "
+    SQL = SQL & "    T.legacy_id = T1.[契約者1No] "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者2入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約者1入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: 契約者1"
+
+    'ダミー入居 (契約中(他社))
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = 'オオタ建設株式会社', "
+    SQL = SQL & "    T.name_family_kana = 'オオタケンセツカブシキガイシャ', "
+    SQL = SQL & "    T.kind_id = '個人', "
+    SQL = SQL & "    T.legacy_id = 'ohta' "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者2入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者1入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約状況] = '契約中(他社)' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: ダミー入居"
+
+    '法人・個人の出し分けおよび値の削除
+    '法人
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = NULL, "
+    SQL = SQL & "    T.company_name_kana = NULL "
+    SQL = SQL & "WHERE T1.[個人・法人区分_1] = '個人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_3] = '個人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_11] = '個人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: '個人'の場合"
+
+    '法人
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = NULL, "
+    SQL = SQL & "    T.name_family_kana = NULL "
+    SQL = SQL & "WHERE T1.[個人・法人区分_1] = '法人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_3] = '法人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_11] = '法人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: '法人'の場合"
+
+    'kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = '10' "
+    SQL = SQL & "WHERE T.[kind_id] = '個人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: kind_id = 個人の場合"
+
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = '20' "
+    SQL = SQL & "WHERE T.[kind_id] = '法人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: kind_id = 法人の場合"
+    
+    'tag
+    SQL = ""
+    SQL = SQL & "UPDATE (((account AS A "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON A.ID = ('R1_' & I.ID)) "
+    SQL = SQL & "INNER JOIN [契約情報一覧] AS K ON I.[物件No] = K.[物件No] "
+    SQL = SQL & "    AND I.[部屋No] = K.[部 屋] "
+    SQL = SQL & "    AND I.[初回契約始期] = K.[契約始期]) "
+    SQL = SQL & "INNER JOIN [契約者情報] AS C ON K.[契約者No] = C.[契約者No]) "
+    SQL = SQL & "SET A.tag = IIF(C.[契約者区分] = '法人', '法人', C.[契約者区分]) "
+    SQL = SQL & "WHERE A.klass = 'Resident' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: tag account.tag更新"
+
+    ' T_MAP for gender_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_gender_id] AS M ON T.gender_id = M.[性別] "
+    SQL = SQL & "SET T.gender_id = M.[gender_id] "
+    SQL = SQL & "WHERE T.klass = 'Resident' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: T_MAP mapping for gender_id"
+
+    ' T_MAP for kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_kind_id_Account] AS M ON T.kind_id = M.[個人法人区分] "
+    SQL = SQL & "SET T.kind_id = M.[kind_id] "
+    SQL = SQL & "WHERE T.klass = 'Resident' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: T_MAP mapping for kind_id"
+    
+
+    ' legacy_id 重複削除 (取込データ順で1番最初の１行のみを出力しそれ以外は出力しない)
+    SQL = ""
+    SQL = SQL & "DELETE FROM account "
+    SQL = SQL & "WHERE klass = 'Resident' "
+    SQL = SQL & "  AND Left(ID, 3) = 'R1_' "
+    SQL = SQL & "  AND legacy_id IS NOT NULL "
+    SQL = SQL & "  AND ID NOT IN ( "
+    SQL = SQL & "      SELECT 'R1_' & MIN(Val(Mid(T2.ID, 4))) "
+    SQL = SQL & "      FROM account AS T2 "
+    SQL = SQL & "      WHERE T2.klass = 'Resident' "
+    SQL = SQL & "        AND Left(T2.ID, 3) = 'R1_' "
+    SQL = SQL & "        AND T2.legacy_id IS NOT NULL "
+    SQL = SQL & "      GROUP BY T2.legacy_id "
+    SQL = SQL & "  ) ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: legacy_id重複削除"
+
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    ' アカウント（新規入居者）
+    '================================================================================
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [新規契約更新一覧] SET [FLG] = '0' ;"
+    
+
+    '既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] AS T "
+    SQL = SQL & "SET T.FLG = '1' "
+    SQL = SQL & "WHERE NOT EXISTS ( "
+    SQL = SQL & "    SELECT 1 "
+    SQL = SQL & "    FROM [入居状況一覧] AS T1 "
+    SQL = SQL & "    WHERE T1.[物件No] = T.[物件No] "
+    SQL = SQL & "      AND T1.[部屋No] = T.[部屋No] "
+    SQL = SQL & "      AND IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], "
+    SQL = SQL & "              IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], "
+    SQL = SQL & "                  IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & "          = IIF(T.[契約者3入居有無] = '入居有り', T.[契約者3No], "
+    SQL = SQL & "              IIF(T.[契約者2入居有無] = '入居有り', T.[契約者2No], "
+    SQL = SQL & "                  IIF(T.[契約者1入居有無] = '入居有り', T.[契約者1No], NULL))) "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)"
+
+    '重複削除のため(FLG=2更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET FLG = '2' "
+    SQL = SQL & "WHERE ID IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [新規契約更新一覧] "
+    SQL = SQL & "    WHERE FLG = '1' "
+    SQL = SQL & "    GROUP BY IIF([契約者3入居有無] = '入居有り', [契約者3No], "
+    SQL = SQL & "             IIF([契約者2入居有無] = '入居有り', [契約者2No], "
+    SQL = SQL & "                 IIF([契約者1入居有無] = '入居有り', [契約者1No], NULL))) "
+    SQL = SQL & ");"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 重複削除のため(FLG=2更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, legacy_charge_user_id, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'R2_' & T.ID as ID , "
+    SQL = SQL & "   'Resident' as klass , "
+    SQL = SQL & "   'ohta-ff' as legacy_charge_user_id , "
+    SQL = SQL & "   T.[契約者No] as legacy_id , "
+    SQL = SQL & "   'アカウント（新規入居者）' as sheet "
+    SQL = SQL & "FROM [新規契約更新一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '2' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 通常処理"
+    
+    '特殊処理
+    SQL = ""
+    SQL = SQL & "UPDATE (Account AS T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 "
+    SQL = SQL & "    ON ('R2_' & T1.[ID]) = T.ID) "
+    SQL = SQL & "LEFT JOIN 契約者情報 AS T2 "
+    SQL = SQL & "    ON T2.[契約者No] = "
+    SQL = SQL & "        IIF(T1.[契約者3入居有無]='入居有り', T1.[契約者3No], "
+    SQL = SQL & "            IIF(T1.[契約者2入居有無]='入居有り', T1.[契約者2No], "
+    SQL = SQL & "                IIF(T1.[契約者1入居有無]='入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & "SET "
+    SQL = SQL & "    T.name_family = IIF(T2.[契約者区分]='法人', NULL, T2.[契約者名]), "
+    SQL = SQL & "    T.company_name = IIF(T2.[契約者区分]='個人', NULL, T2.[契約者名]), "
+    SQL = SQL & "    T.email = T2.[優先メール], "
+    SQL = SQL & "    T.tel_mobile = T2.[携帯1], "
+    SQL = SQL & "    T.kind_id = T2.[契約者区分] "
+    SQL = SQL & ";"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 特殊処理(name_family, company_name, tel_mobile, kind_id)"
+    
+    SQL = ""
+    SQL = SQL & "UPDATE (Account AS T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 "
+    SQL = SQL & "    ON ('R2_' & T1.ID) = T.ID) "
+    SQL = SQL & "SET T.legacy_id = "
+    SQL = SQL & "    IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], "
+    SQL = SQL & "        IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], "
+    SQL = SQL & "            IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & ";"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 特殊処理(legacy_id)"
+
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+ '================================================================================
+    ' アカウント（オーナー）
+    '================================================================================
+    ' Pre-check
+    If DCount("*", "[入居状況一覧]") <= 0 And DCount("*", "[新規契約更新一覧]") <= 0 And DCount("*", "[家主基本情報]") <= 0 And DCount("*", "[物件基本情報(入居者アプリ導入予定先）]") <= 0 Then
+        Exit Sub
+    End If
+    
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [入居状況一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE ID NOT IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [入居状況一覧] "
+    SQL = SQL & "    GROUP BY [家主No] "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, email, tel_fixed, kind_id, legacy_charge_user_id, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'O1_' & T.ID as ID , "
+    SQL = SQL & "   'Owner' as klass , "
+    SQL = SQL & "   T.[メールアドレス] as email , "
+    SQL = SQL & "   T.[TEL1] as tel_fixed , "
+    SQL = SQL & "   T.[個人・法人区分] as kind_id , "
+    SQL = SQL & "   'gmo001' as legacy_charge_user_id , "
+    SQL = SQL & "   T.[家主No] as legacy_id , "
+    SQL = SQL & "   'アカウント（オーナー）' as sheet "
+    SQL = SQL & "FROM [入居状況一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 通常処理"
+    
+    '特殊処理
+    'name_family
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[家主名] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '1' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: name_family"
+
+    'name_family_kana
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family_kana = T1.[家主名カナ] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '1' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: name_family_kana"
+
+    'company_name_kana
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.company_name_kana = T1.[家主名] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '2' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: company_name_kana"
+
+    'company_name
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.[家主名カナ] "
+    SQL = SQL & "WHERE T1.[個人・法人区分] = '2' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: company_name"
+
+    'tel_mobile
+    SQL = ""
+    SQL = SQL & "UPDATE (account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) "
+    SQL = SQL & "INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] "
+    SQL = SQL & "SET T.tel_mobile = T2.[携帯1];"
+    
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: tel_mobile"
+
+    ' gender_id
+    SQL = ""
+    SQL = SQL & "UPDATE (account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) "
+    SQL = SQL & "INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] "
+    SQL = SQL & "SET T.gender_id = T2.[性別];"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: gender_id"
+    
+    ' birthday
+    SQL = ""
+    SQL = SQL & "UPDATE (account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) "
+    SQL = SQL & "INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] "
+    SQL = SQL & "SET T.birthday = T2.[生年月日];"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: birthday"
+
+    ' T_MAP for kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_kind_id_Account] AS M ON T.kind_id = M.[個人法人区分] "
+    SQL = SQL & "SET T.kind_id = M.[kind_id] ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（オーナー） → 特殊処理: T_MAP mapping for kind_id"
+
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    ' アカウント（新規オーナー）
+    '================================================================================
+
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [新規契約更新一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE Nz([貸主名], '') = ''; "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 不要行を削除するため(FLG=1更新)"
+
+    '不要行を削除するため(FLG=2更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "LEFT JOIN [入居状況一覧] AS T "
+    SQL = SQL & "ON T.[家主No] = [新規契約更新一覧].[貸主No] "
+    SQL = SQL & "SET [新規契約更新一覧].[FLG] = '2' "
+    SQL = SQL & "WHERE [新規契約更新一覧].[FLG] = '0' "
+    SQL = SQL & "AND T.[家主No] IS NULL; "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 不要行を削除するため(FLG=2更新)"
+
+    '重複行を削除するため(FLG=3更新)
+    SQL = ""
+    SQL = "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET [FLG] = '0' "
+    SQL = SQL & "WHERE [FLG] = '2' "
+    SQL = SQL & "AND [ID] IN ( "
+    SQL = SQL & "   SELECT MIN(s2.[ID]) "
+    SQL = SQL & "   FROM [新規契約更新一覧] AS s2 "
+    SQL = SQL & "   GROUP By s2.[貸主No] "
+    SQL = SQL & "); "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 重複行を削除するため(FLG=3更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, legacy_charge_user_id, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'O2_' & T.ID as ID , "
+    SQL = SQL & "   'Owner' as klass , "
+    SQL = SQL & "   'gmo001' as legacy_charge_user_id , "
+    SQL = SQL & "   T.[貸主No] as legacy_id , "
+    SQL = SQL & "   'アカウント（新規オーナー）' as sheet "
+    SQL = SQL & "FROM [新規契約更新一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 通常処理"
+    
+    '特殊処理
+    'name_family
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[貸主名] "
+    SQL = SQL & "WHERE T1.[貸主名] NOT LIKE '*会社*' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 特殊処理: name_family"
+
+    'company_name
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = T1.[貸主名] "
+    SQL = SQL & "WHERE T1.[貸主名] LIKE '*会社*' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 特殊処理: company_name"
+
+    'kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = IIF([貸主名] LIKE '*会社*', '20', '10') "
+    db.Execute SQL
+    log_write "set_account:アカウント（新規オーナー） → 特殊処理: kind_id"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+
+    '================================================================================
+    ' アカウント（入居者）
+    '================================================================================
+    
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [入居状況一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE [契約状況] NOT IN ('契約中', '契約中(他社)', '解約予定') ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, legacy_charge_user_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'R1_' & T.ID as ID , "
+    SQL = SQL & "   'Resident' as klass , "
+    SQL = SQL & "   'ohta-ff' as legacy_charge_user_id , "
+    SQL = SQL & "   'アカウント（入居者）' as sheet "
+    SQL = SQL & "FROM [入居状況一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 通常処理"
+    
+    '特殊処理
+    '契約者3
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[契約者名_12], "
+    SQL = SQL & "    T.name_family_kana = T1.[契約者カナ_13], "
+    SQL = SQL & "    T.email = T1.[優先メールアドレス_14], "
+    SQL = SQL & "    T.tel_fixed = T1.[TEL1_15], "
+    SQL = SQL & "    T.tel_mobile = T1.[携帯1_16], "
+    SQL = SQL & "    T.company_name_kana = T1.[契約者カナ_13], "
+    SQL = SQL & "    T.company_name = T1.[契約者名_12], "
+    SQL = SQL & "    T.kind_id = T1.[個人・法人区分_11], "
+    SQL = SQL & "    T.gender_id = T1.[性別_17], "
+    SQL = SQL & "    T.birthday = T1.[生年月日・設立日_18], "
+    SQL = SQL & "    T.legacy_id = T1.[契約者3No] "
+    SQL = SQL & "WHERE T1.[契約者3入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: 契約者3"
+
+    '契約者2
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[契約者名_4], "
+    SQL = SQL & "    T.name_family_kana = T1.[契約者カナ_5], "
+    SQL = SQL & "    T.email = T1.[優先メールアドレス_6], "
+    SQL = SQL & "    T.tel_fixed = T1.[TEL1_7], "
+    SQL = SQL & "    T.tel_mobile = T1.[携帯1_8], "
+    SQL = SQL & "    T.company_name_kana = T1.[契約者カナ_5], "
+    SQL = SQL & "    T.company_name = T1.[契約者名_4], "
+    SQL = SQL & "    T.kind_id = T1.[個人・法人区分_3], "
+    SQL = SQL & "    T.gender_id = T1.[性別_9], "
+    SQL = SQL & "    T.birthday = T1.[生年月日・設立日_10], "
+    SQL = SQL & "    T.legacy_id = T1.[契約者2No] "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約者2入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: 契約者2"
+
+    '契約者1
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = T1.[契約者名], "
+    SQL = SQL & "    T.name_family_kana = T1.[契約者カナ], "
+    SQL = SQL & "    T.email = T1.[優先メールアドレス], "
+    SQL = SQL & "    T.tel_fixed = T1.[TEL1_2], "
+    SQL = SQL & "    T.tel_mobile = T1.[携帯1], "
+    SQL = SQL & "    T.company_name_kana = T1.[契約者カナ], "
+    SQL = SQL & "    T.company_name = T1.[契約者名], "
+    SQL = SQL & "    T.kind_id = T1.[個人・法人区分_1], "
+    SQL = SQL & "    T.gender_id = T1.[性別], "
+    SQL = SQL & "    T.birthday = T1.[生年月日・設立日], "
+    SQL = SQL & "    T.legacy_id = T1.[契約者1No] "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者2入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約者1入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: 契約者1"
+
+    'ダミー入居 (契約中(他社))
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = 'オオタ建設株式会社', "
+    SQL = SQL & "    T.name_family_kana = 'オオタケンセツカブシキガイシャ', "
+    SQL = SQL & "    T.kind_id = '個人', "
+    SQL = SQL & "    T.legacy_id = 'ohta' "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者2入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者1入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約状況] = '契約中(他社)' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: ダミー入居"
+
+    '法人・個人の出し分けおよび値の削除
+    '法人
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.company_name = NULL, "
+    SQL = SQL & "    T.company_name_kana = NULL "
+    SQL = SQL & "WHERE T1.[個人・法人区分_1] = '個人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_3] = '個人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_11] = '個人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: '個人'の場合"
+
+    '法人
+    SQL = ""
+    SQL = SQL & "UPDATE account As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.name_family = NULL, "
+    SQL = SQL & "    T.name_family_kana = NULL "
+    SQL = SQL & "WHERE T1.[個人・法人区分_1] = '法人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_3] = '法人' OR "
+    SQL = SQL & "      T1.[個人・法人区分_11] = '法人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: '法人'の場合"
+
+    'kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = '10' "
+    SQL = SQL & "WHERE T.[kind_id] = '個人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: kind_id = 個人の場合"
+
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = '20' "
+    SQL = SQL & "WHERE T.[kind_id] = '法人' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: kind_id = 法人の場合"
+    
+    'tag
+    SQL = ""
+    SQL = SQL & "UPDATE (((account AS A "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON A.ID = ('R1_' & I.ID)) "
+    SQL = SQL & "INNER JOIN [契約情報一覧] AS K ON I.[物件No] = K.[物件No] "
+    SQL = SQL & "    AND I.[部屋No] = K.[部 屋] "
+    SQL = SQL & "    AND I.[初回契約始期] = K.[契約始期]) "
+    SQL = SQL & "INNER JOIN [契約者情報] AS C ON K.[契約者No] = C.[契約者No]) "
+    SQL = SQL & "SET A.tag = IIF(C.[契約者区分] = '法人', '法人', C.[契約者区分]) "
+    SQL = SQL & "WHERE A.klass = 'Resident' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: tag account.tag更新"
+
+    ' T_MAP for gender_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_gender_id] AS M ON T.gender_id = M.[性別] "
+    SQL = SQL & "SET T.gender_id = M.[gender_id] "
+    SQL = SQL & "WHERE T.klass = 'Resident' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: T_MAP mapping for gender_id"
+
+    ' T_MAP for kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE account AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_kind_id_Account] AS M ON T.kind_id = M.[個人法人区分] "
+    SQL = SQL & "SET T.kind_id = M.[kind_id] "
+    SQL = SQL & "WHERE T.klass = 'Resident' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: T_MAP mapping for kind_id"
+    
+
+    ' legacy_id 重複削除 (取込データ順で1番最初の１行のみを出力しそれ以外は出力しない)
+    SQL = ""
+    SQL = SQL & "DELETE FROM account "
+    SQL = SQL & "WHERE klass = 'Resident' "
+    SQL = SQL & "  AND Left(ID, 3) = 'R1_' "
+    SQL = SQL & "  AND legacy_id IS NOT NULL "
+    SQL = SQL & "  AND ID NOT IN ( "
+    SQL = SQL & "      SELECT 'R1_' & MIN(Val(Mid(T2.ID, 4))) "
+    SQL = SQL & "      FROM account AS T2 "
+    SQL = SQL & "      WHERE T2.klass = 'Resident' "
+    SQL = SQL & "        AND Left(T2.ID, 3) = 'R1_' "
+    SQL = SQL & "        AND T2.legacy_id IS NOT NULL "
+    SQL = SQL & "      GROUP BY T2.legacy_id "
+    SQL = SQL & "  ) ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（入居者） → 特殊処理: legacy_id重複削除"
+
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    ' アカウント（新規入居者）
+    '================================================================================
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [新規契約更新一覧] SET [FLG] = '0' ;"
+    
+
+    '既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] AS T "
+    SQL = SQL & "SET T.FLG = '1' "
+    SQL = SQL & "WHERE NOT EXISTS ( "
+    SQL = SQL & "    SELECT 1 "
+    SQL = SQL & "    FROM [入居状況一覧] AS T1 "
+    SQL = SQL & "    WHERE T1.[物件No] = T.[物件No] "
+    SQL = SQL & "      AND T1.[部屋No] = T.[部屋No] "
+    SQL = SQL & "      AND IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], "
+    SQL = SQL & "              IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], "
+    SQL = SQL & "                  IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & "          = IIF(T.[契約者3入居有無] = '入居有り', T.[契約者3No], "
+    SQL = SQL & "              IIF(T.[契約者2入居有無] = '入居有り', T.[契約者2No], "
+    SQL = SQL & "                  IIF(T.[契約者1入居有無] = '入居有り', T.[契約者1No], NULL))) "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)"
+
+    '重複削除のため(FLG=2更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET FLG = '2' "
+    SQL = SQL & "WHERE ID IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [新規契約更新一覧] "
+    SQL = SQL & "    WHERE FLG = '1' "
+    SQL = SQL & "    GROUP BY IIF([契約者3入居有無] = '入居有り', [契約者3No], "
+    SQL = SQL & "             IIF([契約者2入居有無] = '入居有り', [契約者2No], "
+    SQL = SQL & "                 IIF([契約者1入居有無] = '入居有り', [契約者1No], NULL))) "
+    SQL = SQL & ");"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 重複削除のため(FLG=2更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO account ( "
+    SQL = SQL & "   ID, klass, legacy_charge_user_id, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'R2_' & T.ID as ID , "
+    SQL = SQL & "   'Resident' as klass , "
+    SQL = SQL & "   'ohta-ff' as legacy_charge_user_id , "
+    SQL = SQL & "   T.[契約者No] as legacy_id , "
+    SQL = SQL & "   'アカウント（新規入居者）' as sheet "
+    SQL = SQL & "FROM [新規契約更新一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '2' ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 通常処理"
+    
+    '特殊処理
+    SQL = ""
+    SQL = SQL & "UPDATE (Account AS T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 "
+    SQL = SQL & "    ON ('R2_' & T1.[ID]) = T.ID) "
+    SQL = SQL & "LEFT JOIN 契約者情報 AS T2 "
+    SQL = SQL & "    ON T2.[契約者No] = "
+    SQL = SQL & "        IIF(T1.[契約者3入居有無]='入居有り', T1.[契約者3No], "
+    SQL = SQL & "            IIF(T1.[契約者2入居有無]='入居有り', T1.[契約者2No], "
+    SQL = SQL & "                IIF(T1.[契約者1入居有無]='入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & "SET "
+    SQL = SQL & "    T.name_family = IIF(T2.[契約者区分]='法人', NULL, T2.[契約者名]), "
+    SQL = SQL & "    T.company_name = IIF(T2.[契約者区分]='個人', NULL, T2.[契約者名]), "
+    SQL = SQL & "    T.email = T2.[優先メール], "
+    SQL = SQL & "    T.tel_mobile = T2.[携帯1], "
+    SQL = SQL & "    T.kind_id = T2.[契約者区分] "
+    SQL = SQL & ";"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 特殊処理(name_family, company_name, tel_mobile, kind_id)"
+    
+    SQL = ""
+    SQL = SQL & "UPDATE (Account AS T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 "
+    SQL = SQL & "    ON ('R2_' & T1.ID) = T.ID) "
+    SQL = SQL & "SET T.legacy_id = "
+    SQL = SQL & "    IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], "
+    SQL = SQL & "        IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], "
+    SQL = SQL & "            IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & ";"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 特殊処理(legacy_id)"
+
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+
+ 
+    '================================================================================
+    ' 建物
+    '================================================================================
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新) - 重複削除 (データ順で１番最初のデータを出力対象とする)
+    SQL = ""
+    SQL = SQL & "UPDATE [入居状況一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE ID NOT IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [入居状況一覧] "
+    SQL = SQL & "    GROUP BY [物件No] "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_building:建物 → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert - PRIMARY TABLE ONLY)
+    SQL = ""
+    SQL = SQL & "INSERT INTO building ( "
+    SQL = SQL & "   ID, name, legacy_id, prefecture_code, city_code, address, zip_code, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'B1_' & T.ID as ID , "
+    SQL = SQL & "   T.[物件名] as name , "
+    SQL = SQL & "   T.[物件No] as legacy_id , "
+    SQL = SQL & "   T.[都道府県名] as prefecture_code , "
+    SQL = SQL & "   T.[市区町村名] as city_code , "
+    SQL = SQL & "   T.[町地域名] & T.[丁番地名] & T.[住所その他] as address , "
+    SQL = SQL & "   T.[郵便番号] as zip_code, "
+    SQL = SQL & "   '建物' as sheet "
+    SQL = SQL & "FROM [入居状況一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_building:建物 → 通常処理"
+    
+
+    ' 家主基本情報からの値の取得
+    SQL = ""
+    SQL = SQL & "UPDATE building As T "
+    SQL = SQL & "INNER JOIN [物件基本情報] AS T2 ON T.legacy_id = T2.[物件No] "
+    SQL = SQL & "SET T.station_name = T2.[交通沿線1駅名], "
+    SQL = SQL & "    T.walk_minute = T2.[交通沿線1徒歩(分)], "
+    SQL = SQL & "    T.built_year = Format(T2.[竣工日], 'yyyy'), "
+    SQL = SQL & "    T.built_month = Format(T2.[竣工日], 'mm'), "
+    SQL = SQL & "    T.floor = T2.[階建て], "
+    SQL = SQL & "    T.structure_id = T2.[構造], "
+    SQL = SQL & "    T.land_use_zone_id = IIF(Nz(T2.[用途地域], '') <> '', T2.[用途地域], '50') "
+    SQL = SQL & "WHERE T.sheet = '建物' ;"
+    db.Execute SQL
+    log_write "set_building:建物 → 特殊処理: 物件基本情報からの値の取得"
+
+    ' T_MAP mapping for structure_id
+    SQL = ""
+    SQL = SQL & "UPDATE building AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_structure_id_Building] AS M ON T.structure_id = M.[建物構造] "
+    SQL = SQL & "SET T.structure_id = M.[ID] "
+    SQL = SQL & "WHERE T.sheet = '建物' ;"
+    db.Execute SQL
+    log_write "set_building:建物 → 特殊処理: T_MAP mapping for structure_id"
+
+    ' T_MAP mapping for land_use_zone_id
+    SQL = ""
+    SQL = SQL & "UPDATE building AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_land_use_zone_id_Building] AS M ON T.land_use_zone_id = M.[用途地域] "
+    SQL = SQL & "SET T.land_use_zone_id = M.[ID] "
+    SQL = SQL & "WHERE T.sheet = '建物' ;"
+    db.Execute SQL
+    log_write "set_building:建物 → 特殊処理: T_MAP mapping for land_use_zone_id"
+    
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    ' 建物（新規）
+    '================================================================================
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [新規契約更新一覧] SET [FLG] = '0' ;"
+    
+    ' 既存の物件と紐づくものを除外 (入居状況一覧に存在する物件Noを除外)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE ID NOT IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [新規契約更新一覧] "
+    SQL = SQL & "    GROUP BY [物件No] "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_building:建物（新規） → 既存の物件と紐づくものを除外(FLG=1更新)"
+    
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] AS S "
+    SQL = SQL & "INNER JOIN 入居状況一覧 AS T ON S.[物件No] = T.[物件No] "
+    SQL = SQL & "SET S.[FLG] = '1' ;"
+    db.Execute SQL
+    log_write "set_building:建物（新規） → 不要行を削除するため(FLG=2更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO building ( "
+    SQL = SQL & "   ID, name, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'B2_' & T.ID as ID , "
+    SQL = SQL & "   T.[物件名] as name , "
+    SQL = SQL & "   T.[物件No] as legacy_id , "
+    SQL = SQL & "   '建物（新規）' as sheet "
+    SQL = SQL & "FROM [新規契約更新一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_building:建物（新規） → 通常処理"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+
+
+    '================================================================================
+    ' 契約
+    '================================================================================
+    
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新) - 契約状況が指定外のものを除外
+    SQL = ""
+    SQL = SQL & "UPDATE [入居状況一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE [契約状況] NOT IN ('契約中', '契約中(他社)', '解約予定') "
+    db.Execute SQL
+    log_write "set_contract:契約 → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert - PRIMARY TABLE ONLY)
+    SQL = ""
+    SQL = SQL & "INSERT INTO contract ( "
+    SQL = SQL & "   ID, legacy_property_id, legacy_owner_id, legacy_building_id, "
+    SQL = SQL & "   start_from, end_until, corporate_guarantor_name, "
+    SQL = SQL & "   gas_contact_name, gas_contact_tel, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'C1_' & T.ID as ID , "
+    SQL = SQL & "   T.[物件No] & '-' & T.[部屋No] as legacy_property_id , "
+    SQL = SQL & "   T.[家主No] as legacy_owner_id , "
+    SQL = SQL & "   T.[物件No] as legacy_building_id , "
+    SQL = SQL & "   T.[初回契約始期] as start_from , "
+    SQL = SQL & "   T.[契約終期] as end_until , "
+    SQL = SQL & "   T.[家賃保証会社名] as corporate_guarantor_name , "
+    SQL = SQL & "   T.[ガス業者名] as gas_contact_name , "
+    SQL = SQL & "   T.[ガス業者TEL1] as gas_contact_tel , "
+    SQL = SQL & "   '契約' as sheet "
+    SQL = SQL & "FROM [入居状況一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 通常処理"
+    
+    '特殊処理
+    ' 1. 契約者3 の優先処理
+    SQL = ""
+    SQL = SQL & "UPDATE contract As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) "
+    SQL = SQL & "SET T.legacy_resident_id = T1.[契約者3No] "
+    SQL = SQL & "WHERE T1.[契約者3入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: 契約者3優先処理"
+
+    ' 2. 契約者2 の優先処理
+    SQL = ""
+    SQL = SQL & "UPDATE contract As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) "
+    SQL = SQL & "SET T.legacy_resident_id = T1.[契約者2No] "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約者2入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: 契約者2優先処理"
+
+    ' 3. 契約者1 の優先処理
+    SQL = ""
+    SQL = SQL & "UPDATE contract As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) "
+    SQL = SQL & "SET T.legacy_resident_id = T1.[契約者1No] "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者2入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約者1入居有無] = '入居有り' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: 契約者1優先処理"
+
+    ' 4. ダミー契約者(ohta) の処理
+    SQL = ""
+    SQL = SQL & "UPDATE contract As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) "
+    SQL = SQL & "SET T.legacy_resident_id = 'ohta' "
+    SQL = SQL & "WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者2入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND Nz(T1.[契約者1入居有無],'') <> '入居有り' "
+    SQL = SQL & "  AND T1.[契約状況] = '契約中(他社)' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: ダミー契約者(ohta)の処理"
+
+
+    ' 5. start_from (初回契約始期 -> そのまま / 契約中(他社) -> 2026/01/01)
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) "
+    SQL = SQL & "SET T.start_from = I.[初回契約始期] "
+    SQL = SQL & "WHERE T.sheet = '契約' "
+    SQL = SQL & "  AND I.[初回契約始期] IS NOT NULL ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: start_from(初回契約始期)"
+
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) "
+    SQL = SQL & "SET T.start_from = #2026/01/01# "
+    SQL = SQL & "WHERE T.sheet = '契約' "
+    SQL = SQL & "  AND I.[契約状況] = '契約中(他社)' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: start_from(初回契約始期/契約中(他社) fallback)"
+
+    ' 6. sublease (紐づけ)
+    ' TODO: 紐づけ元のフィールド名が未定義のため、[SOURCE_FIELD]を適切な列名に書き換えてください
+    SQL = ""
+    SQL = SQL & "UPDATE (contract As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) "
+    SQL = SQL & "INNER JOIN [物件管理情報一覧] AS T2 ON T2.[物件No] = T1.[物件No] "
+    SQL = SQL & "SET T.sublease = '1' "
+    SQL = SQL & "WHERE T2.[管理形態] = '一括借上' AND T.sheet = '契約' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: sublease(物件管理情報一覧)"
+
+    ' 7. legacy_contractor_id (紐づけ)
+    ' TODO: 紐づけ元のフィールド名が未定義のため、[SOURCE_FIELD]を適切な列名に書き換えてください
+    SQL = ""
+    SQL = SQL & "UPDATE (contract As T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) "
+    SQL = SQL & "INNER JOIN [契約情報一覧] AS T3 "
+    SQL = SQL & "ON T3.[物件No] = T1.[物件No] AND T3.[部 屋] = T1.[部屋No] "
+    SQL = SQL & "SET T.legacy_contractor_id = IIf(T.[legacy_resident_id] <> T3.[契約者No], T3.[契約者No], NULL) "
+    SQL = SQL & "WHERE T.sheet = '契約' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: legacy_contractor_id(契約情報一覧)"
+
+    ' 8. end_date (紐づけ)
+    ' TODO: 紐づけ元のフィールド名が未定義のため、[SOURCE_FIELD]を適切な列名に書き換えてください。
+    ' JOIN条件の「legacy_resident_id」に対応する解約情報一覧側のフィールドも [JOIN_FIELD] を書き換えてください。
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) "
+    SQL = SQL & "INNER JOIN [解約情報一覧] AS T4 "
+    SQL = SQL & "ON T4.[物件No] = T1.[物件No] "
+    SQL = SQL & "AND T4.[部 屋] = T1.[部屋No] "
+    SQL = SQL & "AND T4.[契約者No] = T.[legacy_resident_id] "
+    SQL = SQL & "SET T.end_date = T4.[受付・立会情報 解約日] "
+    SQL = SQL & "WHERE T.sheet = '契約' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: end_date(解約情報一覧)"
+
+    ' 9. legacy_id の生成 (legacy_contractor_idがブランクではない場合)
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) "
+    SQL = SQL & "SET T.legacy_id = "
+    SQL = SQL & "IIf(Nz(T.legacy_contractor_id,'') <> '', "
+    SQL = SQL & "T1.[物件No] & '-' & T1.[部屋No] & '-' & T.legacy_contractor_id, "
+    SQL = SQL & "T1.[物件No] & '-' & T1.[部屋No] & '-' & T.legacy_resident_id) "
+    SQL = SQL & "WHERE T.sheet = '契約' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: legacy_idの生成"
+    
+    '10.
+    'electricity_contact_name
+    'electricity_contact_tel
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) "
+    SQL = SQL & "SET T.electricity_contact_name = T1.[電気業者名], "
+    SQL = SQL & "    T.electricity_contact_tel = T1.[電気業者TEL1] "
+    SQL = SQL & "WHERE T1.[電気業者名] NOT LIKE '*電気　家主一括契約*' "
+    SQL = SQL & "AND T1.[電気業者名] NOT LIKE '*水道　家主一括契約*' ;"
+    db.Execute SQL
+    
+    
+    '11.
+    'drink_water_contact_name
+    'drink_water_contact_tel
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) "
+    SQL = SQL & "SET T.drink_water_contact_name = T1.[上水道業者名], "
+    SQL = SQL & "    T.drink_water_contact_tel = T1.[上水道業者TEL1] "
+    SQL = SQL & "WHERE T1.[上水道業者名] NOT LIKE '*水道　家主一括契約*' ;"
+    db.Execute SQL
+    
+    ' 12. kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE (((contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) "
+    SQL = SQL & "INNER JOIN [契約情報一覧] AS K ON I.[物件No] = K.[物件No] "
+    SQL = SQL & "    AND I.[部屋No] = K.[部 屋] "
+    SQL = SQL & "    AND I.[初回契約始期] = K.[契約始期]) "
+    SQL = SQL & "INNER JOIN [契約者情報] AS C ON K.[契約者No] = C.[契約者No]) "
+    SQL = SQL & "SET T.kind_id = IIF(C.[契約者区分] = '法人', '20', "
+    SQL = SQL & "                 IIF(C.[契約者区分] = '個人', '10', T.kind_id)) "
+    SQL = SQL & "WHERE T.sheet = '契約' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: kind_id(契約者区分)"
+
+    ' 13 kind_id (契約中(他社) -> 10)
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) "
+    SQL = SQL & "SET T.kind_id = '10' "
+    SQL = SQL & "WHERE T.sheet = '契約' "
+    SQL = SQL & "  AND I.[契約状況] = '契約中(他社)';"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: kind_id(契約中(他社) fallback)"
+    
+    ' 14. end_until (契約終期 -> そのまま / 契約中(他社) -> 9999/12/31)
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) "
+    SQL = SQL & "SET T.end_until = I.[契約終期] "
+    SQL = SQL & "WHERE T.sheet = '契約' "
+    SQL = SQL & "  AND I.[契約終期] IS NOT NULL ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: end_util(契約終期/契約中(他社) fallback)"
+    
+    SQL = ""
+    SQL = SQL & "UPDATE (contract AS T "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) "
+    SQL = SQL & "SET T.end_until = #9999/12/31# "
+    SQL = SQL & "WHERE T.sheet = '契約' "
+    SQL = SQL & "  AND I.[契約状況] = '契約中(他社)' ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: end_util(契約終期/契約中(他社) fallback)"
+
+    ' 15 legacy_id（加工後）の重複削除 (取込データ順で1番最初の１行のみを出力)
+    SQL = ""
+    SQL = SQL & "DELETE FROM contract "
+    SQL = SQL & "WHERE sheet = '契約' "
+    SQL = SQL & "  AND legacy_id IS NOT NULL "
+    SQL = SQL & "  AND ID NOT IN ( "
+    SQL = SQL & "      SELECT 'C1_' & MIN(Val(Mid(T2.ID, 4))) "
+    SQL = SQL & "      FROM contract AS T2 "
+    SQL = SQL & "      WHERE T2.sheet = '契約' "
+    SQL = SQL & "        AND T2.legacy_id IS NOT NULL "
+    SQL = SQL & "      GROUP BY T2.legacy_id "
+    SQL = SQL & "  ) ;"
+    db.Execute SQL
+    log_write "set_contract:契約 → 特殊処理: legacy_id重複削除"
+
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    ' 契約（新規）
+    '================================================================================
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [新規契約更新一覧] SET [FLG] = '0' ;"
+    
+    '既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] AS T "
+    SQL = SQL & "SET T.FLG = '1' "
+    SQL = SQL & "WHERE NOT EXISTS ( "
+    SQL = SQL & "    SELECT 1 "
+    SQL = SQL & "    FROM [入居状況一覧] AS T1 "
+    SQL = SQL & "    WHERE T1.[物件No] = T.[物件No] "
+    SQL = SQL & "      AND T1.[部屋No] = T.[部屋No] "
+    SQL = SQL & "      AND IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], "
+    SQL = SQL & "              IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], "
+    SQL = SQL & "                  IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & "          = IIF(T.[契約者3入居有無] = '入居有り', T.[契約者3No], "
+    SQL = SQL & "              IIF(T.[契約者2入居有無] = '入居有り', T.[契約者2No], "
+    SQL = SQL & "                  IIF(T.[契約者1入居有無] = '入居有り', T.[契約者1No], NULL))) "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)"
+    
+    '不要行を削除するため(FLG=1更新) - 重複削除 (データ順で１番最初のデータ1件のみを採用)
+    '重複削除のため(FLG=2更新)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET FLG = '2' "
+    SQL = SQL & "WHERE ID IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [新規契約更新一覧] "
+    SQL = SQL & "    WHERE FLG = '1' "
+    SQL = SQL & "    GROUP BY IIF([契約者3入居有無] = '入居有り', [契約者3No], "
+    SQL = SQL & "             IIF([契約者2入居有無] = '入居有り', [契約者2No], "
+    SQL = SQL & "                 IIF([契約者1入居有無] = '入居有り', [契約者1No], NULL))) "
+    SQL = SQL & ");"
+    db.Execute SQL
+    log_write "set_account:アカウント（新規入居者） → 重複削除のため(FLG=2更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO contract ( "
+    SQL = SQL & "   ID, legacy_property_id, legacy_owner_id, "
+    SQL = SQL & "   legacy_building_id, start_from, end_until, corporate_guarantor_name, "
+    SQL = SQL & "   legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'C2_' & T.ID as ID , "
+    SQL = SQL & "   T.[物件No] & '-' & T.[部屋No] as legacy_property_id , "
+    SQL = SQL & "   T.[貸主No] as legacy_owner_id , "
+    SQL = SQL & "   T.[物件No] as legacy_building_id , "
+    SQL = SQL & "   T.[契約始期] as start_from , "
+    SQL = SQL & "   T.[契約終期] as end_until , "
+    SQL = SQL & "   T.[家賃保証会社名] as corporate_guarantor_name , "
+    SQL = SQL & "   T.[物件No] & '-' & T.[部屋No] & '-' & T.[契約者No] as legacy_id , "
+    SQL = SQL & "   '契約（新規）' as sheet "
+    SQL = SQL & "FROM [新規契約更新一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '2' ;"
+    db.Execute SQL
+    log_write "set_contract:契約（新規） → 通常処理"
+    
+    '特殊処理
+    SQL = ""
+    SQL = SQL & "UPDATE (Contract AS T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 "
+    SQL = SQL & "    ON ('C2_' & T1.ID) = T.ID) "
+    SQL = SQL & "SET T.legacy_resident_id = "
+    SQL = SQL & "    IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], "
+    SQL = SQL & "        IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], "
+    SQL = SQL & "            IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) "
+    SQL = SQL & ";"
+
+    db.Execute SQL
+    log_write "set_contract_legacy_id: Contract.legacy_id set from 新規契約更新一覧 (priority 3->2->1)"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"
+    
+    'set_charge
+    set_charge
+    
+    AddNewFieldToTable "契約情報一覧", "FLG", "TEXT(1)"
+    
+    'set_charge (set charge = 0)
+    SQL = ""
+    SQL = SQL & "UPDATE [契約情報一覧] AS S "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T ON T.[物件No] = S.[物件No] "
+    SQL = SQL & "AND T.[部屋No] = S.[部　屋] "
+    SQL = SQL & "AND T.[初回契約始期] = S.[契約始期] "
+    SQL = SQL & "SET S.[FLG] = '1';"
+    db.Execute SQL
+    
+    SQL = ""
+    SQL = SQL & "UPDATE [Contract] AS S "
+    SQL = SQL & "SET  S.charge_rent = '0', "
+    SQL = SQL & "     S.charge_management = '0', "
+    SQL = SQL & "     S.charge_parking = '0', "
+    SQL = SQL & "     S.charge_additional = '0', "
+    SQL = SQL & "     S.charge_deposit = '0', "
+    SQL = SQL & "     S.charge_gratuity = '0' "
+    SQL = SQL & "WHERE S.[ID] LIKE 'C1_%' "
+    SQL = SQL & "AND NOT EXISTS ( "
+    SQL = SQL & "    SELECT 1 FROM [契約情報一覧] AS T "
+    SQL = SQL & "    WHERE T.[契約者No] = S.[legacy_resident_id] "
+    SQL = SQL & "    AND T.[FLG] = '1' "
+    SQL = SQL & ");"
+    db.Execute SQL
+    log_write "set_contract:契約（新規） → set_charge 0"
+    
+    '■項目削除
+    DeleteFieldInTable "契約情報一覧", "FLG"
+
+     '================================================================================
+    ' 契約者
+    '================================================================================
+    If DCount("*", "[入居状況一覧]") <= 0 And DCount("*", "[契約情報一覧]") <= 0 And DCount("*", "[物件基本情報(入居者アプリ導入予定先）]") <= 0 Then
+        Exit Sub
+    End If
+    
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    AddNewFieldToTable "契約情報一覧", "FLG", "TEXT(1)"
+    AddNewFieldToTable "契約者情報", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    db.Execute "UPDATE [契約情報一覧] SET [FLG] = '0' ;"
+    db.Execute "UPDATE [契約者情報] SET [FLG] = '0' ;"
+    
+    'GMO入居状況一覧.csvと契約情報一覧.csvのマージ
+    SQL = ""
+    SQL = SQL & "UPDATE [契約情報一覧] AS S "
+    SQL = SQL & "INNER JOIN [入居状況一覧] AS T ON S.[物件No] = T.[物件No] "
+    SQL = SQL & "AND S.[部　屋] = T.[部屋No] "
+    SQL = SQL & "AND S.[契約始期] = T.[初回契約始期] "
+    SQL = SQL & "SET S.FLG = '1' ;"
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 特殊処理: 出力条件 入居状況一覧"
+    
+    '契約情報一覧.csvと契約者情報.csvのマージ
+    SQL = ""
+    SQL = SQL & "UPDATE [契約者情報] AS S "
+    SQL = SQL & "INNER JOIN [契約情報一覧] AS T ON S.[契約者No] = T.[契約者No] "
+    SQL = SQL & "SET S.FLG = '1' ;"
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 特殊処理: 出力条件 契約情報一覧"
+       
+    '出力条件 契約情報一覧
+    SQL = ""
+    SQL = SQL & "UPDATE [契約者情報] "
+    SQL = SQL & "SET FLG = '0' "
+    SQL = SQL & "WHERE ID NOT IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [契約者情報] "
+    SQL = SQL & "    GROUP BY [契約者No] "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 特殊処理: 出力条件 契約情報一覧"
+    
+    '通常処理 (Standard Insert - PRIMARY TABLE ONLY)
+    ' [入居状況一覧] をベースにして、まずはレコードの枠だけを作成する
+    SQL = ""
+    SQL = SQL & "INSERT INTO contractor ( "
+    SQL = SQL & "   ID, name , legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'CR_' & T.ID as ID , "
+    SQL = SQL & "   T.[契約者名(SJIS)] as name, "
+    SQL = SQL & "   T.[契約者No] as legacy_id , "
+    SQL = SQL & "   '契約者' as sheet "
+    SQL = SQL & "FROM [契約情報一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '1' ;"
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 通常処理 (枠の作成)"
+    
+    ' 契約者情報.csvのマージ (email, tel_mobile, kind_id の取得)
+    SQL = ""
+    SQL = SQL & "UPDATE (contractor AS T "
+    SQL = SQL & "INNER JOIN [契約情報一覧] AS T1 ON T.ID = ('CR_' & T1.ID)) "
+    SQL = SQL & "INNER JOIN [契約者情報] AS T2 ON T1.[契約者No] = T2.[契約者No] "
+    SQL = SQL & "SET T.kind_id = T2.[契約者区分], "
+    SQL = SQL & "    T.email = T2.[優先メール], "
+    SQL = SQL & "    T.tel_mobile = T2.[携帯1] "
+    SQL = SQL & "WHERE T2.[FLG] = '1' ;"
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 特殊処理: 契約情報一覧とのマージ"
+
+    ' T_MAP mapping for kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE contractor AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_kind_id_Contractor] AS M ON T.kind_id = M.[個人法人区分] "
+    SQL = SQL & "SET T.kind_id = M.[kind_id] "
+    SQL = SQL & "WHERE T.sheet = '契約者'; "
+    db.Execute SQL
+    log_write "set_contractor:契約者 → 特殊処理: T_MAP mapping for kind_id"
+
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+    DeleteFieldInTable "契約情報一覧", "FLG"
+    DeleteFieldInTable "契約者情報", "FLG"
+
+      '================================================================================
+    ' 部屋
+    '================================================================================
+    '■項目追加
+    AddNewFieldToTable "入居状況一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [入居状況一覧] SET [FLG] = '0' ;"
+    
+    '不要行を削除するため(FLG=1更新) - 重複削除 (データ順で１番最初のデータを出力対象とする)
+    SQL = ""
+    SQL = SQL & "UPDATE [入居状況一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE ID NOT IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [入居状況一覧] "
+    SQL = SQL & "    GROUP BY [物件No], [部屋No] "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_property:部屋 → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert - PRIMARY TABLE ONLY)
+    SQL = ""
+    SQL = SQL & "INSERT INTO property ( "
+    SQL = SQL & "   ID, legacy_owner_id, legacy_building_id, name, zip_code, "
+    SQL = SQL & "   prefecture_code, city_code, address_1, kind_id, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'P1_' & T.ID as ID , "
+    SQL = SQL & "   T.[家主No] as legacy_owner_id , "
+    SQL = SQL & "   T.[物件No] as legacy_building_id , "
+    SQL = SQL & "   T.[部屋No] as name , "
+    SQL = SQL & "   T.[郵便番号] as zip_code , "
+    SQL = SQL & "   T.[都道府県名] as prefecture_code , "
+    SQL = SQL & "   T.[市区町村名] as city_code , "
+    SQL = SQL & "   Nz(T.[町地域名],'') & Nz(T.[丁番地名],'') & Nz(T.[住所その他],'') as address_1 , "
+    SQL = SQL & "   T.[部屋分類] as kind_id , "
+    SQL = SQL & "   T.[物件No] & '-' & T.[部屋No] as legacy_id , "
+    SQL = SQL & "   '部屋' as sheet "
+    SQL = SQL & "FROM [入居状況一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_property:部屋 → 通常処理"
+    
+    '特殊処理
+    ' T_MAP mapping for kind_id
+    SQL = ""
+    SQL = SQL & "UPDATE property AS T "
+    SQL = SQL & "INNER JOIN [T_MAP_kind_id_Property] AS M ON T.kind_id = M.[種別] "
+    SQL = SQL & "SET T.kind_id = M.[ID] "
+    SQL = SQL & "WHERE T.sheet = '部屋' ;"
+    db.Execute SQL
+    log_write "set_property:部屋 → 特殊処理: T_MAP mapping for kind_id"
+    
+    '■項目削除
+    DeleteFieldInTable "入居状況一覧", "FLG"
+
+    '================================================================================
+    ' 部屋（新規）
+    '================================================================================
+    '■項目追加
+    AddNewFieldToTable "新規契約更新一覧", "FLG", "TEXT(1)"
+    
+    '■FLGリセット
+    db.Execute "UPDATE [新規契約更新一覧] SET [FLG] = '0' ;"
+    
+    ' 既存の部屋と紐づくものを除外 (入居状況一覧に存在する 物件No + 部屋No を除外)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] As T "
+    SQL = SQL & "SET T.FLG = '1' "
+    SQL = SQL & "WHERE T.[物件No] & '-' & T.[部屋No] IN ( "
+    SQL = SQL & "    SELECT T1.[物件No] & '-' & T1.[部屋No] "
+    SQL = SQL & "    FROM [入居状況一覧] AS T1 "
+    SQL = SQL & "    WHERE T1.[物件No] IS NOT NULL "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_property:部屋（新規） → 既存の部屋と紐づくものを除外(FLG=1更新)"
+    
+    '不要行を削除するため(FLG=1更新) - 重複削除 (データ順で１番最初のデータ1件のみを採用)
+    SQL = ""
+    SQL = SQL & "UPDATE [新規契約更新一覧] "
+    SQL = SQL & "SET FLG = '1' "
+    SQL = SQL & "WHERE FLG = '0' "
+    SQL = SQL & "AND ID NOT IN ( "
+    SQL = SQL & "    SELECT MIN(ID) "
+    SQL = SQL & "    FROM [新規契約更新一覧] "
+    SQL = SQL & "    GROUP BY [物件No], [部屋No] "
+    SQL = SQL & ") ;"
+    db.Execute SQL
+    log_write "set_property:部屋（新規） → 不要行を削除するため(FLG=1更新)"
+    
+    '通常処理 (Standard Insert)
+    SQL = ""
+    SQL = SQL & "INSERT INTO property ( "
+    SQL = SQL & "   ID, legacy_owner_id, legacy_building_id, name, legacy_id, sheet "
+    SQL = SQL & ") SELECT "
+    SQL = SQL & "   'P2_' & T.ID as ID , "
+    SQL = SQL & "   T.[貸主No] as legacy_owner_id , "
+    SQL = SQL & "   T.[物件No] as legacy_building_id , "
+    SQL = SQL & "   T.[部屋No] as name , "
+    SQL = SQL & "   T.[物件No] & '-' & T.[部屋No] as legacy_id , "
+    SQL = SQL & "   '部屋（新規）' as sheet "
+    SQL = SQL & "FROM [新規契約更新一覧] AS T "
+    SQL = SQL & "WHERE T.FLG = '0' ;"
+    db.Execute SQL
+    log_write "set_property:部屋（新規） → 通常処理"
+    
+    '特殊処理
+    ' kind_id: "P"もしくは"駐"が含まれていない場合
+    SQL = ""
+    SQL = SQL & "UPDATE property As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('P2_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = '10' "
+    SQL = SQL & "WHERE T1.[部屋No] NOT LIKE '*P*' AND T1.[部屋No] NOT LIKE '*駐*' ;"
+    db.Execute SQL
+    log_write "set_property:部屋（新規） → 特殊処理: 'P'もしくは'駐'が含まれていない場合"
+
+    ' kind_id: "P"もしくは"駐"が含まれる場合
+    SQL = ""
+    SQL = SQL & "UPDATE property As T "
+    SQL = SQL & "INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('P2_' & T1.ID) "
+    SQL = SQL & "SET T.kind_id = '20' "
+    SQL = SQL & "WHERE T1.[部屋No] LIKE '*P*' OR T1.[部屋No] LIKE '*駐*' ;"
+    db.Execute SQL
+    log_write "set_property:部屋（新規） → 特殊処理: 'P'もしくは'駐'が含まれる場合"
+    
+    '■項目削除
+    DeleteFieldInTable "新規契約更新一覧", "FLG"

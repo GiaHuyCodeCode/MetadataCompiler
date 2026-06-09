@@ -1,0 +1,1078 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Mapping dictionary of business cases to VBA/SQL implementation logic",
+    "source_reference": "sample/SOURCE.txt",
+    "total_cases": 24
+  },
+  "cases": [
+    {
+      "sheet_pattern": "アカウント（オーナー）_O",
+      "target_table": "Account",
+      "id_prefix": "O_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "O_' & T.ID",
+        "klass": "Owner",
+        "email": "T.[メールアドレス]",
+        "tel_fixed": "T.TEL1",
+        "closing_month": "12",
+        "closing_day": "31",
+        "legacy_id": "T.家主No",
+        "sheet": "アカウント（オーナー）_O"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 入居状況一覧 SET 入居状況一覧.FLG = '1' WHERE 入居状況一覧.ID NOT IN ( SELECT MIN(ID) FROM 入居状況一覧 GROUP BY 家主No );"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "name_family, name_family_kana, kind_id -> 個人・法人区分_0: \"1\"の場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('O_' & T1.ID) SET T.name_family = T1.家主名, T.name_family_kana = T1.家主名カナ, T.kind_id = '10' WHERE T1.[個人・法人区分] = '1';"
+        },
+        {
+          "description": "company_name, company_name_kana, kind_id -> 個人・法人区分_0: \"2\"の場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('O_' & T1.ID) SET T.company_name = T1.家主名, T.company_name_kana = T1.家主名カナ, T.kind_id = '20' WHERE T1.[個人・法人区分] = '2';"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（新規オーナー）",
+      "target_table": "Account",
+      "id_prefix": "ON_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "ON_' & T.ID",
+        "klass": "Owner",
+        "closing_month": "12",
+        "closing_day": "31",
+        "legacy_id": "T.貸主No",
+        "sheet": "アカウント（新規オーナー）"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T SET T.FLG = '1' WHERE Nz(T.部屋No, '') = '';"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.部屋No SET T1.FLG = '1'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 SET T1.FLG = '1' WHERE Nz(T1.[貸主名],'') = ''"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.貸主No = T2.家主No SET T1.FLG = '1'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.FLG = '1' WHERE 新規契約更新一覧.ID NOT IN ( SELECT MIN(ID) FROM 新規契約更新一覧 WHERE FLG = '0' GROUP BY 貸主No );"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "name_family, kind_id -> \"会社\"を含まない場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('ON_' & T1.ID) SET T.name_family = T1.貸主名, T.kind_id = '10' WHERE T1.[貸主名] NOT LIKE '%会社%';"
+        },
+        {
+          "description": "company_name, kind_id -> \"会社\"を含む場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('ON_' & T1.ID) SET T.company_name = T1.貸主名, T.kind_id = '20' WHERE T1.[貸主名] LIKE '%会社%';"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（入居者）_Y",
+      "target_table": "Account",
+      "id_prefix": "Y_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "Y_' & T.ID",
+        "klass": "Resident",
+        "legacy_charge_user_id": "gmo002",
+        "sheet": "アカウント（入居者）_Y"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 入居状況一覧 SET 入居状況一覧.FLG = '1' WHERE 入居状況一覧.契約状況 NOT IN ('契約中','解約予定');"
+        },
+        {
+          "description": "dulicate legacy_id",
+          "sql_query": "DELETE FROM Account WHERE ID LIKE 'Y_%' AND ID NOT IN ( SELECT MIN(ID) FROM Account WHERE ID LIKE 'Y_%' GROUP BY legacy_id )"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "特殊処理",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('Y_' & T1.ID) SET T.name_family = SWITCH( , T1.[契約者名], , T1.[契約者名_55], , T1.[契約者名_45], True, T1.[契約者名] ), T.company_name = SWITCH( , T1.[契約者名], , T1.[契約者名_55], , T1.[契約者名_45], True, T1.[契約者名] ), T.name_family_kana = SWITCH( , T1.[契約者カナ], , T1.[契約者カナ_56], , T1.[契約者カナ_46], True, T1.[契約者カナ] ), T.company_name_kana = SWITCH( , T1.[契約者カナ], , T1.[契約者カナ_56], , T1.[契約者カナ_46], True, T1.[契約者カナ] ), T.email = SWITCH( , T1.[優先メールアドレス], , T1.[優先メールアドレス_58], , T1.[優先メールアドレス_48], True, T1.[優先メールアドレス] ), T.tel_fixed = SWITCH( , T1.[TEL1_39], , T1.[TEL1_59], , T1.[TEL1_49], True, T1.[TEL1_39] ), T.tel_mobile = SWITCH( , T1.[携帯1], , T1.[携帯1_60], , T1.[携帯1_50], True, T1.[携帯1] ), T.kind_id = SWITCH( , T1.[個人・法人区分_33], , T1.[個人・法人区分_53], , T1.[個人・法人区分_43], True, T1.[個人・法人区分_33] ), T.gender_id = SWITCH( , T1.[性別], , T1.[性別_61], , T1.[性別_51], True, T1.[性別] ), T.birthday = SWITCH( , T1.[生年月日・設立日], , T1.[生年月日・設立日_62], , T1.[生年月日・設立日_52], True, T1.[生年月日・設立日] ), T.legacy_id = SWITCH( , T1.[契約者1No], , T1.[契約者3No], , T1.[契約者2No], True, T1.[契約者1No] );"
+        },
+        {
+          "description": "上記で出力したデータの個人・法人区分が\"個人\"の場合",
+          "sql_query": "UPDATE Account  AS T SET T.company_name = '', T.company_name_kana = '', T.kind_id = '10' WHERE T.ID LIKE '%Y_%' AND T.kind_id = '個人';"
+        },
+        {
+          "description": "上記で出力したデータの個人・法人区分が\"法人\"の場合",
+          "sql_query": "UPDATE Account  AS T SET T.name_family = '', T.name_family_kana = '', T.kind_id = '20' WHERE T.ID LIKE '%Y_%' AND T.kind_id = '法人';"
+        },
+        {
+          "description": "tag",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('Y_' & T1.ID) SET T.tag = T1.契約状況 WHERE T1.[契約状況] = '解約予定';"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（新規入居者）_N",
+      "target_table": "Account",
+      "id_prefix": "N_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "N_' & T.ID",
+        "klass": "Resident",
+        "legacy_charge_user_id": "gmo002",
+        "legacy_id": "T.[契約者No]",
+        "sheet": "アカウント（新規入居者）_N"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 LEFT JOIN 入居状況一覧 AS T2 ON (T1.物件No = T2.物件No) AND (T1.部屋No = T2.部屋No) AND (T1.契約者No = T2.契約者1No) SET T1.FLG = '0' WHERE T2.物件No IS NULL;"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.FLG = '1' WHERE 新規契約更新一覧.ID NOT IN ( SELECT MIN(ID) FROM 新規契約更新一覧 WHERE FLG = '0' GROUP BY 契約者No );"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "name_family, company_name, kind_id -> \"会社\"が含まれていない場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('N_' & T1.ID) SET T.name_family = T1.契約者名, T.kind_id = '10' WHERE T1.[契約者名] NOT LIKE '%会社%';"
+        },
+        {
+          "description": "name_family, company_name, kind_id -> \"会社\"が含まれている場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 新規契約更新一覧 AS T1 ON T.ID = ('N_' & T1.ID) SET T.company_name = T1.契約者名, T.kind_id = '20' WHERE T1.[契約者名] LIKE '%会社%';"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（既存入居者）_P",
+      "target_table": "Account",
+      "id_prefix": "P_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "P_' & T.ID",
+        "klass": "Resident",
+        "email": "IIF(T.[メールアドレス] = '-', NULL, T.[メールアドレス])",
+        "tel_fixed": "IIF(T.[電話番号] = '-', NULL, T.[電話番号])",
+        "tel_mobile": "IIF(T.[携帯番号/SMS] = '-', NULL, T.[携帯番号/SMS])",
+        "zip_code": "IIF(T.[郵便番号] = '-', NULL, T.[郵便番号])",
+        "prefecture_code": "IIF(T.[都道府県] = '-', NULL, T.[都道府県])",
+        "city_code": "IIF(T.[市区町村] = '-', NULL, T.[市区町村])",
+        "address_1": "IIF(T.[住所１] = '-', NULL, T.[住所１])",
+        "address_2": "IIF(T.[住所2] = '-', NULL, T.[住所2])",
+        "gender_id": "IIF(T.[性別] = '-', NULL, T.[性別])",
+        "birthday": "IIF(T.[生年月日] = '-', NULL, T.[生年月日])",
+        "legacy_charge_user_id": "gmo002",
+        "legacy_id": "T.[基幹入居者ID]",
+        "sheet": "アカウント（既存入居者）_P"
+      },
+      "output_conditions": [
+        {
+          "description": "アカウント（入居者）のシートで出力したlegacy_idのデータを除外したい",
+          "sql_query": "UPDATE 入居者管理 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.基幹入居者ID = Switch( ((T2.[契約者1入居有無] = '入居有り') AND (T2.[契約者2入居有無] = '入居有り') AND (T2.[個人・法人区分_33] = '個人') AND (T2.[個人・法人区分_43] = '個人')), T2.契約者1No, T2.[契約者3入居有無] = '入居有り', T2.契約者3No, T2.[契約者2入居有無] = '入居有り', T2.契約者2No, True, T2.契約者1No ) SET T1.FLG = '1'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.部屋No AND T1.契約者No = T2.契約者1No SET T1.FLG = '1'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 入居者管理 AS T1 INNER JOIN 新規契約更新一覧 AS T2 ON T1.基幹入居者ID = T2.契約者No SET T1.FLG = '2' WHERE T1.FLG = '0' AND T2.FLG = '0'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 入居者管理 AS T1 INNER JOIN 解約情報一覧 AS T2 ON T1.基幹入居者ID = T2.契約者No SET T1.FLG = '3' WHERE T1.FLG = '0'"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "name_family, kind_id, name_family_kana, name_first, name_first_kana -> \"個人\"の場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 入居者管理 AS T1 ON T.ID = ('P_' & T1.ID) SET T.name_family = T1.姓, T.kind_id = '10', T.name_family_kana = T1.[姓 (カナ)], T.name_first = IIF(T1.[名] = '-', NULL, T1.[名]), T.name_first_kana = IIF(T1.[名 (カナ)] = '-', NULL, T1.[名 (カナ)]) WHERE T1.[個人／法人] = '個人';"
+        },
+        {
+          "description": "company_name, kind_id, company_name_kana -> \"法人\"の場合",
+          "sql_query": "UPDATE Account  AS T INNER JOIN 入居者管理 AS T1 ON T.ID = ('P_' & T1.ID) SET T.company_name = T1.姓, T.kind_id = '20', T.company_name_kana = IIF(T1.[会社名 (カナ)] = '-', NULL, T1.[会社名 (カナ)]) WHERE T1.[個人／法人] = '法人';"
+        },
+        {
+          "description": "解約情報にデータがある入居者は退去済",
+          "sql_query": "UPDATE (Account AS T INNER JOIN 入居者管理 AS T1 ON T.ID = ('P_' & T1.ID)) SET T.tag = SWITCH( T1.[タグ] = '解約予定', '退去済', T1.[タグ] = '退去済', '退去済', Nz(Replace(T1.[タグ], '-', ''), '') = '', '管理移行', True, NULL )"
+        },
+        {
+          "description": "gender_id",
+          "sql_query": "UPDATE Account  AS T INNER JOIN T_MAP_gender_id AS M ON T.gender_id = M.性別 SET T.gender_id = M.gender_id"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "建物",
+      "target_table": "Building",
+      "id_prefix": "B_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "B_' & T.ID",
+        "name": "T.物件名",
+        "legacy_id": "T.物件No",
+        "prefecture_code": "T.都道府県名",
+        "city_code": "T.市区町村名",
+        "address": "T.町地域名 & T.丁番地名 & T.住所その他",
+        "zip_code": "T.郵便番号",
+        "sheet": "建物"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 入居状況一覧 SET 入居状況一覧.FLG = '1' WHERE 入居状況一覧.ID NOT IN ( SELECT MIN(ID) FROM 入居状況一覧 GROUP BY 物件No );"
+        }
+      ],
+      "special_processing": []
+    },
+    {
+      "sheet_pattern": "建物（新規）",
+      "target_table": "Building",
+      "id_prefix": "BN_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "BN_' & T.ID",
+        "name": "T.物件名",
+        "legacy_id": "T.物件No",
+        "sheet": "建物（新規）"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 新規契約更新一覧 SET 新規契約更新一覧.FLG = '1' WHERE 新規契約更新一覧.ID NOT IN ( SELECT MIN(ID) FROM 新規契約更新一覧 GROUP BY 物件No );"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No SET T1.FLG = '1'"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE Building  SET Building.[エラー内容] = Building.[エラー内容] & '/物件名がブランク', Building.[エラー項目] = Building.[エラー項目] & '/name' WHERE Nz(Building.name, '') = '';"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE Building  SET Building.[エラー内容] = Building.[エラー内容] & '/物件Noがブランク', Building.[エラー項目] = Building.[エラー項目] & '/legacy_id' WHERE Nz(Building.legacy_id, '') = '';"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "契約_K",
+      "target_table": "Contract",
+      "id_prefix": "K_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "K_' & T.ID",
+        "legacy_property_id": "T.物件No & '-' & T.部屋No",
+        "legacy_owner_id": "T.家主No",
+        "legacy_building_id": "T.物件No",
+        "start_from": "T.初回契約始期",
+        "end_until": "T.契約終期",
+        "corporate_guarantor_name": "T.家賃保証会社名",
+        "legacy_id": "T.物件No & '-' & T.部屋No & '-' & T.契約者1No",
+        "mail_box_no": "T.[内 容(メールBOX)]",
+        "electricity_contact_tel": "T.電気業者TEL1",
+        "drink_water_contact_tel": "T.上水道業者TEL1",
+        "drainage_contact_tel": "T.排水業者TEL1",
+        "gas_contact_tel": "T.ガス業者TEL1",
+        "internet_contact_name": "T.その他業者1名",
+        "internet_contact_tel": "T.その他業者1TEL1",
+        "ファイル名": "T.ファイル名",
+        "sheet": "契約_K"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 入居状況一覧 SET 入居状況一覧.FLG = '1' WHERE 契約状況 NOT IN ('契約中', '解約予定')"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 入居状況一覧 SET 入居状況一覧.FLG = '1' WHERE 入居状況一覧.ID NOT IN ( SELECT MIN(ID) FROM 入居状況一覧 GROUP BY 物件No, 部屋No );"
+        },
+        {
+          "description": "cohabitant_names",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.cohabitant_names = T1.契約者名_45 WHERE T1.FLG = '0' AND (T1.[個人・法人区分_33] = '個人' AND T1.[個人・法人区分_43] = '個人' AND T1.[契約者1入居有無] = '入居有り' AND T1.[契約者2入居有無] = '入居有り');"
+        },
+        {
+          "description": "end_date",
+          "sql_query": "UPDATE (Contract As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID)) INNER JOIN 解約情報一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.[部 屋] AND T1.契約者1No = T2.契約者No SET T.end_date = T2.[受付・立会情報 解約日] WHERE T1.FLG = '0';"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "legacy_resident_id",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.legacy_resident_id = SWITCH ( (T1.[個人・法人区分_33] = '個人' AND T1.[個人・法人区分_43] = '個人' AND T1.[契約者1入居有無] = '入居有り' AND T1.[契約者2入居有無] = '入居有り'), T1.契約者1No, (T1.[契約者3入居有無] = '入居有り'), T1.契約者3No, (T1.[契約者2入居有無] = '入居有り'), T1.契約者2No, True, T1.契約者1No ) ;"
+        },
+        {
+          "description": "kind_id",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.kind_id = SWITCH ( (T1.[契約者3入居有無] = '入居有り'), '20', (T1.[契約者2入居有無] = '入居有り'), '20', (T1.[個人・法人区分_33] = '法人'), '20', True, '10' );"
+        },
+        {
+          "description": "legacy_contractor_id",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.legacy_contractor_id = SWITCH ( ((T1.[契約者3入居有無] = '入居有り' OR T1.[契約者2入居有無] = '入居有り') AND (T1.[個人・法人区分_33] = '法人')), T1.契約者1No, (Nz(T1.[契約者1入居有無], '') = ''), T1.契約者1No, True, NULL );"
+        },
+        {
+          "description": "enable_support_24h",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.enable_support_24h = IIF( Nz(T1.[金額(税込額)(安心サービス24)], '') <> '' OR Nz(T1.[金額(税込額)(24時間コールセンター)], '') <> '' OR Nz(T1.[金額(税込額)(安心サポート)], '') <> '' OR Nz(T1.[金額(税込額)(安心サポート（満革）)], '') <> '' , '1', NULL );"
+        },
+        {
+          "description": "electricity_contact_name",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.electricity_contact_name = T1.[電気業者名] WHERE T1.[電気業者名] NOT LIKE '%連絡不要%';"
+        },
+        {
+          "description": "drink_water_contact_name",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.drink_water_contact_name = T1.[上水道業者名] WHERE T1.[上水道業者名] NOT LIKE '%連絡不要%';"
+        },
+        {
+          "description": "gas_contact_name",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.gas_contact_name = T1.[ガス業者名] WHERE (T1.[ガス業者名] NOT LIKE '%連絡不要%' AND T1.[ガス業者名] NOT LIKE '%田中総合燃料%');"
+        },
+        {
+          "description": "drainage_contact_name",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 入居状況一覧 AS T1 ON T.ID = ('K_' & T1.ID) SET T.drainage_contact_name = T1.[排水業者名] WHERE (T1.[排水業者名] NOT LIKE '%連絡不要%' AND T1.[排水業者名] NOT LIKE '%汲み取り業者%');"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "新規契約_S",
+      "target_table": "Contract",
+      "id_prefix": "S_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "S_' & T.ID",
+        "legacy_property_id": "T.物件No & '-' & T.部屋No",
+        "legacy_resident_id": "T.契約者No",
+        "legacy_owner_id": "T.貸主No",
+        "legacy_building_id": "T.物件No",
+        "start_from": "T.契約始期",
+        "end_until": "T.契約終期",
+        "charge_rent": "0",
+        "corporate_guarantor_name": "T.家賃保証会社名",
+        "legacy_id": "T.物件No & '-' & T.部屋No & '-' & T.契約者No",
+        "ファイル名": "T.ファイル名",
+        "sheet": "新規契約_S"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T SET T.FLG = '1' WHERE Nz(T.部屋No, '') = '';"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 INNER JOIN 入居状況一覧 AS T2 ON (T1.物件No = T2.物件No) AND (T1.部屋No = T2.部屋No) AND (T1.契約者No = T2.契約者1No) SET T1.FLG = '1';"
+        }
+      ],
+      "special_processing": []
+    },
+    {
+      "sheet_pattern": "既存契約_E",
+      "target_table": "Contract",
+      "id_prefix": "E_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "E_' & T.ID",
+        "legacy_property_id": "T.[基幹部屋ID]",
+        "legacy_resident_id": "T.[基幹入居者ID]",
+        "legacy_owner_id": "T.[基幹オーナーID]",
+        "legacy_building_id": "T.[基幹建物ID]",
+        "start_from": "IIF(IsDate(T.[賃貸開始]), Format(T.[賃貸開始], 'yyyy-mm-dd'), NULL)",
+        "end_until": "IIF(IsDate(T.[賃貸終了]), Format(T.[賃貸終了], 'yyyy-mm-dd'), NULL)",
+        "charge_rent": "Val(Replace(T.[賃料], ',', ''))",
+        "charge_management": "Val(Replace(T.[共益費], ',', ''))",
+        "charge_parking": "Val(Replace(T.[駐車場], ',', ''))",
+        "charge_accumulation": "Val(Replace(T.[修繕積立金], ',', ''))",
+        "charge_additional": "Val(Replace(T.[その他], ',', ''))",
+        "charge_deposit": "Val(Replace(T.[敷金], ',', ''))",
+        "charge_gratuity": "Val(Replace(T.[礼金], ',', ''))",
+        "charge_bond": "Val(Replace(T.[保証料], ',', ''))",
+        "months_of_rent_for_renewal": "Val(Replace(T.[更新料], ',', ''))",
+        "individual_guarantor_name": "IIF(T.[連帯保証人] = '-', NULL, T.[連帯保証人])",
+        "corporate_guarantor_name": "IIF(T.[保証会社] = '-', NULL, T.[保証会社])",
+        "cohabitant_names": "IIF(T.[同居人] = '-', NULL, T.[同居人])",
+        "sublease": "T.[管理方法]",
+        "IIF(T.[備考] = '-', NULL, T.[備考]) as [note]": "IIF(T.[備考] = '-', NULL, T.[備考]) as [note]",
+        "property_checkup_from": "IIF(IsDate(T.[入居日]), Format(T.[入居日], 'yyyy-mm-dd'), NULL)",
+        "kind_id": "T.[個人/法人]",
+        "legacy_id": "T.[基幹契約ID]",
+        "enable_support_24h": "IIF(T.[24時間サポート] = '-', NULL, T.[24時間サポート])",
+        "termination_by_day": "IIF(T.[解約予告期間] = '-', NULL, T.[解約予告期間])",
+        "mail_box_no": "IIF(T.[メールボックスNo_] = '-', NULL, T.[メールボックスNo_])",
+        "electricity_contact_name": "IIF(T.[【電気】連絡先名] = '-', NULL, T.[【電気】連絡先名])",
+        "electricity_contact_tel": "IIF(T.[【電気】連絡先TEL] = '-', NULL, T.[【電気】連絡先TEL])",
+        "drink_water_contact_name": "IIF(T.[【水道(飲料水)】連絡先名] = '-', NULL, T.[【水道(飲料水)】連絡先名])",
+        "drink_water_contact_tel": "IIF(T.[【水道(飲料水)】連絡先TEL] = '-', NULL, T.[【水道(飲料水)】連絡先TEL])",
+        "drainage_contact_name": "IIF(T.[【水道(排水)】連絡先名] = '-', NULL, T.[【水道(排水)】連絡先名])",
+        "drainage_contact_tel": "IIF(T.[【水道(排水)】連絡先TEL] = '-', NULL, T.[【水道(排水)】連絡先TEL])",
+        "gas_contact_name": "IIF(T.[【ガス】連絡先名] = '-', NULL, T.[【ガス】連絡先名])",
+        "gas_contact_tel": "IIF(T.[【ガス】連絡先TEL] = '-', NULL, T.[【ガス】連絡先TEL])",
+        "hot_water_contact_name": "IIF(T.[【給湯】連絡先名] = '-', NULL, T.[【給湯】連絡先名])",
+        "hot_water_contact_tel": "IIF(T.[【給湯】連絡先TEL] = '-', NULL, T.[【給湯】連絡先TEL])",
+        "internet_contact_name": "IIF(T.[【インターネット】連絡先名] = '-', NULL, T.[【インターネット】連絡先名])",
+        "internet_contact_tel": "IIF(T.[【インターネット】連絡先TEL] = '-', NULL, T.[【インターネット】連絡先TEL])",
+        "cable_tv_contact_name": "IIF(T.[【ケーブルテレビ】連絡先名] = '-', NULL, T.[【ケーブルテレビ】連絡先名])",
+        "cable_tv_contact_tel": "IIF(T.[【ケーブルテレビ】連絡先TEL] = '-', NULL, T.[【ケーブルテレビ】連絡先TEL])",
+        "ファイル名": "T.[ファイル名]",
+        "sheet": "既存契約_E"
+      },
+      "output_conditions": [
+        {
+          "description": "契約状況を\"契約中\"と\"解約予定”のみにするため(FLG=1更新)",
+          "sql_query": "UPDATE 入居状況一覧 SET 入居状況一覧.FLG = '1' WHERE 入居状況一覧.ID NOT IN ( SELECT MIN(ID) FROM 入居状況一覧 GROUP BY 物件No );"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 契約情報管理 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.基幹建物ID = T2.物件No SET T1.FLG = '1' WHERE T2.FLG = '0'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 契約情報管理 AS T1 INNER JOIN 解約情報一覧 AS T2 ON T1.基幹契約ID = (T2.物件No & '-' & T2.[部 屋] & '-' & T2.契約者No) SET T1.FLG = '1'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 契約情報管理 AS T1 INNER JOIN 新規契約更新一覧 AS T2 ON T1.基幹契約ID = (T2.物件No & '-' & T2.[部屋No] & '-' & T2.契約者No) SET T1.FLG = '1'"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "end_date",
+          "sql_query": "UPDATE Contract  As T SET T.end_date = \" & sqlDate & \" WHERE T.ID LIKE 'E_%';"
+        },
+        {
+          "description": "legacy_contractor_id",
+          "sql_query": "UPDATE (Contract As T INNER JOIN 契約情報管理 AS T1 ON T.ID = ('E_' & T1.ID)) INNER JOIN 契約者情報管理 AS T2 ON T1.[契約者] = T2.[氏名/会社名] SET T.legacy_contractor_id = T2.[契約者ID] ;"
+        },
+        {
+          "description": "sublease",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 契約情報管理 AS T1 ON T.ID = ('E_' & T1.ID) SET T.sublease = SWITCH ( (T1.[管理方法] = 'サブリース'), '1', (T1.[管理方法] = '管理委託'), '0', True, NULL );"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "解約_C",
+      "target_table": "Contract",
+      "id_prefix": "C_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "C_' & T.ID",
+        "kind_id": "SWITCH( (T.[個人・法人区分_33] = '個人'), '10', (T.[個人・法人区分_33] = '法人'), '20', True, NULL )",
+        "name": "T.[契約者名]",
+        "email": "T.[優先メールアドレス]",
+        "tel_mobile": "T.[携帯1]",
+        "legacy_id": "T.[契約者1No]"
+      },
+      "output_conditions": [
+        {
+          "description": "契約状況を\"契約中\"と\"解約予定”のみにするため(FLG=1更新)",
+          "sql_query": "UPDATE 解約情報一覧 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T2.[部屋No] = T1.[部 屋] AND T2.[契約者1No] = T1.[契約者No] SET T1.FLG = '1'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 契約情報管理 AS T1 INNER JOIN 解約情報一覧 AS T2 ON T2.[物件No] & '-' & T2.[部 屋] & '-' & T2.[契約者No] = T1.基幹契約ID SET T1.FLG = '0' WHERE T2.FLG = '0';"
+        },
+        {
+          "description": "end_date",
+          "sql_query": "UPDATE (Contract As T INNER JOIN 契約情報管理 AS T1 ON T.ID = ('C_' & T1.ID)) INNER JOIN 解約情報一覧 AS T2 ON T2.[物件No] & '-' & T2.[部 屋] & '-' & T2.[契約者No] = T1.基幹契約ID SET T.end_date = IIF(IsDate(T2.[受付・立会情報 解約日]), Format(T2.[受付・立会情報 解約日], 'yyyy-mm-dd'), T2.[受付・立会情報 解約日]) WHERE T2.FLG = '0';"
+        },
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 入居状況一覧 as T SET T.FLG = '0' WHERE (T.[契約状況] = '契約中' OR T.[契約状況] = '解約予定') AND (T.[契約者3入居有無] = '入居有り' OR T.[契約者2入居有無] = '入居有り') AND (T.[個人・法人区分_33] = '法人');"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 入居状況一覧 as T SET T.FLG = '0' WHERE (T.[契約状況] = '契約中' OR T.[契約状況] = '解約予定') AND Nz(T.[契約者1入居有無], '') = ''"
+        },
+        {
+          "description": "特殊処理",
+          "sql_query": "DELETE FROM Contractor WHERE ID NOT IN ( SELECT MIN(ID) FROM Contractor GROUP BY legacy_id )"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "legacy_contractor_id",
+          "sql_query": "UPDATE (Contract As T INNER JOIN 契約情報管理 AS T1 ON T.ID = ('C_' & T1.ID)) INNER JOIN 契約者情報管理 AS T2 ON T1.[契約者] = T2.[氏名/会社名] SET T.legacy_contractor_id = T2.[契約者ID] ;"
+        },
+        {
+          "description": "sublease",
+          "sql_query": "UPDATE Contract  As T INNER JOIN 契約情報管理 AS T1 ON T.ID = ('C_' & T1.ID) SET T.sublease = SWITCH ( (T1.[管理方法] = 'サブリース'), '1', (T1.[管理方法] = '管理委託'), '0', True, NULL );"
+        },
+        {
+          "description": "kind_id",
+          "sql_query": "UPDATE Contract  As T SET T.kind_id = SWITCH ( (T.[kind_id] = '個人'), '10', (T.[kind_id] = '法人'), '20', True, T.[kind_id] );"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "部屋",
+      "target_table": "Property",
+      "id_prefix": "P_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "P_' & T.ID",
+        "legacy_owner_id": "T.家主No",
+        "legacy_building_id": "T.物件No",
+        "name": "T.部屋No",
+        "zip_code": "T.郵便番号",
+        "prefecture_code": "T.都道府県名",
+        "city_code": "T.市区町村名",
+        "address_1": "T.町地域名 & T.丁番地名 & T.住所その他",
+        "kind_id": "10",
+        "legacy_id": "T.物件No & '-' & T.部屋No",
+        "sheet": "部屋"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 入居状況一覧 SET 入居状況一覧.FLG = '1' WHERE 入居状況一覧.ID NOT IN ( SELECT MIN(ID) FROM 入居状況一覧 GROUP BY 物件No, 部屋No );"
+        }
+      ],
+      "special_processing": []
+    },
+    {
+      "sheet_pattern": "部屋（新規）",
+      "target_table": "Property",
+      "id_prefix": "PN_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "PN_' & T.ID",
+        "legacy_owner_id": "T.貸主No",
+        "legacy_building_id": "T.物件No",
+        "name": "T.部屋No",
+        "kind_id": "10",
+        "legacy_id": "T.物件No & '-' & T.部屋No",
+        "sheet": "部屋（新規）"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 INNER JOIN 入居状況一覧 AS T2 ON T1.物件No = T2.物件No AND T1.部屋No = T2.部屋No SET T1.FLG = '1'"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 SET T1.FLG = '1' WHERE Nz(T1.貸主No, '') = '' OR T1.貸主No = '0';"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE 新規契約更新一覧 AS T1 SET T1.FLG = '1' WHERE T1.部屋No IN ('駐車場','看板');"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE Property  SET Property.[エラー内容] = Property.[エラー内容] & '/物件Noがブランク', Property.[エラー項目] = Property.[エラー項目] & '/legacy_building_id' WHERE Nz(Property.legacy_building_id, '') = '';"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE Property  SET Property.[エラー内容] = Property.[エラー内容] & '/部屋Noがブランク', Property.[エラー項目] = Property.[エラー項目] & '/name' WHERE Nz(Property.name, '') = '';"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（オーナー）",
+      "target_table": "Account",
+      "id_prefix": "O1_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "O1_' & T.ID",
+        "klass": "Owner",
+        "email": "T.[メールアドレス]",
+        "tel_fixed": "T.[TEL1]",
+        "kind_id": "T.[個人・法人区分]",
+        "legacy_charge_user_id": "gmo001",
+        "legacy_id": "T.[家主No]",
+        "sheet": "アカウント（オーナー）"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE [入居状況一覧] SET FLG = '1' WHERE ID NOT IN ( SELECT MIN(ID) FROM [入居状況一覧] GROUP BY [家主No] ) ;"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "name_family",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) SET T.name_family = T1.[家主名] WHERE T1.[個人・法人区分] = '1' ;"
+        },
+        {
+          "description": "name_family_kana",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) SET T.name_family_kana = T1.[家主名カナ] WHERE T1.[個人・法人区分] = '1' ;"
+        },
+        {
+          "description": "company_name_kana",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) SET T.company_name_kana = T1.[家主名] WHERE T1.[個人・法人区分] = '2' ;"
+        },
+        {
+          "description": "company_name",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('O1_' & T1.ID) SET T.company_name = T1.[家主名カナ] WHERE T1.[個人・法人区分] = '2' ;"
+        },
+        {
+          "description": "tel_mobile",
+          "sql_query": "UPDATE (account AS T INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] SET T.tel_mobile = T2.[携帯1];"
+        },
+        {
+          "description": "gender_id",
+          "sql_query": "UPDATE (account AS T INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] SET T.gender_id = T2.[性別];"
+        },
+        {
+          "description": "birthday",
+          "sql_query": "UPDATE (account AS T INNER JOIN [入居状況一覧] AS T1 ON T.ID = 'O1_' & T1.ID) INNER JOIN [家主基本情報] AS T2 ON T1.[家主No] = T2.[家主No] SET T.birthday = T2.[生年月日];"
+        },
+        {
+          "description": "T_MAP for kind_id",
+          "sql_query": "UPDATE Account  AS T INNER JOIN [T_MAP_kind_id_Account] AS M ON T.kind_id = M.[個人法人区分] SET T.kind_id = M.[kind_id] ;"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（新規オーナー）",
+      "target_table": "Account",
+      "id_prefix": "O2_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "O2_' & T.ID",
+        "klass": "Owner",
+        "legacy_charge_user_id": "gmo001",
+        "legacy_id": "T.[貸主No]",
+        "sheet": "アカウント（新規オーナー）"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE [新規契約更新一覧] SET FLG = '1' WHERE Nz([貸主名], '') = '';"
+        },
+        {
+          "description": "不要行を削除するため(FLG=2更新)",
+          "sql_query": "UPDATE [新規契約更新一覧] LEFT JOIN [入居状況一覧] AS T ON T.[家主No] = [新規契約更新一覧].[貸主No] SET [新規契約更新一覧].[FLG] = '2' WHERE [新規契約更新一覧].[FLG] = '0' AND T.[家主No] IS NULL;"
+        },
+        {
+          "description": "重複行を削除するため(FLG=3更新)",
+          "sql_query": "UPDATE [新規契約更新一覧] SET [FLG] = '0' WHERE [FLG] = '2' AND [ID] IN ( SELECT MIN(s2.[ID]) FROM [新規契約更新一覧] AS s2 GROUP By s2.[貸主No] );"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "name_family",
+          "sql_query": "UPDATE Account  As T INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) SET T.name_family = T1.[貸主名] WHERE T1.[貸主名] NOT LIKE '*会社*' ;"
+        },
+        {
+          "description": "company_name",
+          "sql_query": "UPDATE Account  As T INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) SET T.company_name = T1.[貸主名] WHERE T1.[貸主名] LIKE '*会社*' ;"
+        },
+        {
+          "description": "kind_id",
+          "sql_query": "UPDATE Account  As T INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('O2_' & T1.ID) SET T.kind_id = IIF([貸主名] LIKE '*会社*', '20', '10')"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（入居者）",
+      "target_table": "Account",
+      "id_prefix": "R1_",
+      "primary_source": "account",
+      "normal_processing": {
+        "ID": "R1_' & T.ID",
+        "klass": "Resident",
+        "legacy_charge_user_id": "ohta-ff",
+        "sheet": "アカウント（入居者）"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新)",
+          "sql_query": "UPDATE [入居状況一覧] SET FLG = '1' WHERE [契約状況] NOT IN ('契約中', '契約中(他社)', '解約予定') ;"
+        },
+        {
+          "description": "legacy_id 重複削除 (取込データ順で1番最初の１行のみを出力しそれ以外は出力しない)",
+          "sql_query": "DELETE FROM Account WHERE klass = 'Resident' AND Left(ID, 3) = 'R1_' AND legacy_id IS NOT NULL AND ID NOT IN ( SELECT 'R1_' & MIN(Val(Mid(T2.ID, 4))) FROM account AS T2 WHERE T2.klass = 'Resident' AND Left(T2.ID, 3) = 'R1_' AND T2.legacy_id IS NOT NULL GROUP BY T2.legacy_id ) ;"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "契約者3",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.name_family = T1.[契約者名_12], T.name_family_kana = T1.[契約者カナ_13], T.email = T1.[優先メールアドレス_14], T.tel_fixed = T1.[TEL1_15], T.tel_mobile = T1.[携帯1_16], T.company_name_kana = T1.[契約者カナ_13], T.company_name = T1.[契約者名_12], T.kind_id = T1.[個人・法人区分_11], T.gender_id = T1.[性別_17], T.birthday = T1.[生年月日・設立日_18], T.legacy_id = T1.[契約者3No] WHERE T1.[契約者3入居有無] = '入居有り' ;"
+        },
+        {
+          "description": "契約者2",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.name_family = T1.[契約者名_4], T.name_family_kana = T1.[契約者カナ_5], T.email = T1.[優先メールアドレス_6], T.tel_fixed = T1.[TEL1_7], T.tel_mobile = T1.[携帯1_8], T.company_name_kana = T1.[契約者カナ_5], T.company_name = T1.[契約者名_4], T.kind_id = T1.[個人・法人区分_3], T.gender_id = T1.[性別_9], T.birthday = T1.[生年月日・設立日_10], T.legacy_id = T1.[契約者2No] WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' AND T1.[契約者2入居有無] = '入居有り' ;"
+        },
+        {
+          "description": "契約者1",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.name_family = T1.[契約者名], T.name_family_kana = T1.[契約者カナ], T.email = T1.[優先メールアドレス], T.tel_fixed = T1.[TEL1_2], T.tel_mobile = T1.[携帯1], T.company_name_kana = T1.[契約者カナ], T.company_name = T1.[契約者名], T.kind_id = T1.[個人・法人区分_1], T.gender_id = T1.[性別], T.birthday = T1.[生年月日・設立日], T.legacy_id = T1.[契約者1No] WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' AND Nz(T1.[契約者2入居有無],'') <> '入居有り' AND T1.[契約者1入居有無] = '入居有り' ;"
+        },
+        {
+          "description": "ダミー入居 (契約中(他社))",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.name_family = 'オオタ建設株式会社', T.name_family_kana = 'オオタケンセツカブシキガイシャ', T.kind_id = '個人', T.legacy_id = 'ohta' WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' AND Nz(T1.[契約者2入居有無],'') <> '入居有り' AND Nz(T1.[契約者1入居有無],'') <> '入居有り' AND T1.[契約状況] = '契約中(他社)' ;"
+        },
+        {
+          "description": "法人",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.company_name = NULL, T.company_name_kana = NULL WHERE T1.[個人・法人区分_1] = '個人' OR T1.[個人・法人区分_3] = '個人' OR T1.[個人・法人区分_11] = '個人' ;"
+        },
+        {
+          "description": "法人",
+          "sql_query": "UPDATE Account  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.name_family = NULL, T.name_family_kana = NULL WHERE T1.[個人・法人区分_1] = '法人' OR T1.[個人・法人区分_3] = '法人' OR T1.[個人・法人区分_11] = '法人' ;"
+        },
+        {
+          "description": "kind_id",
+          "sql_query": "UPDATE Account  AS T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.kind_id = '10' WHERE T.[kind_id] = '個人' ;"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE Account  AS T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('R1_' & T1.ID) SET T.kind_id = '20' WHERE T.[kind_id] = '法人' ;"
+        },
+        {
+          "description": "tag",
+          "sql_query": "UPDATE (((account AS A INNER JOIN [入居状況一覧] AS I ON A.ID = ('R1_' & I.ID)) INNER JOIN [契約情報一覧] AS K ON I.[物件No] = K.[物件No] AND I.[部屋No] = K.[部 屋] AND I.[初回契約始期] = K.[契約始期]) INNER JOIN [契約者情報] AS C ON K.[契約者No] = C.[契約者No]) SET A.tag = IIF(C.[契約者区分] = '法人', '法人', C.[契約者区分]) WHERE A.klass = 'Resident' ;"
+        },
+        {
+          "description": "T_MAP for gender_id",
+          "sql_query": "UPDATE Account  AS T INNER JOIN [T_MAP_gender_id] AS M ON T.gender_id = M.[性別] SET T.gender_id = M.[gender_id] WHERE T.klass = 'Resident' ;"
+        },
+        {
+          "description": "T_MAP for kind_id",
+          "sql_query": "UPDATE Account  AS T INNER JOIN [T_MAP_kind_id_Account] AS M ON T.kind_id = M.[個人法人区分] SET T.kind_id = M.[kind_id] WHERE T.klass = 'Resident' ;"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "アカウント（新規入居者）",
+      "target_table": "Account",
+      "id_prefix": "R2_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "R2_' & T.ID",
+        "klass": "Resident",
+        "legacy_charge_user_id": "ohta-ff",
+        "legacy_id": "T.[契約者No]",
+        "sheet": "アカウント（新規入居者）"
+      },
+      "output_conditions": [
+        {
+          "description": "既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)",
+          "sql_query": "UPDATE [新規契約更新一覧] AS T SET T.FLG = '1' WHERE NOT EXISTS ( SELECT 1 FROM [入居状況一覧] AS T1 WHERE T1.[物件No] = T.[物件No] AND T1.[部屋No] = T.[部屋No] AND IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) = IIF(T.[契約者3入居有無] = '入居有り', T.[契約者3No], IIF(T.[契約者2入居有無] = '入居有り', T.[契約者2No], IIF(T.[契約者1入居有無] = '入居有り', T.[契約者1No], NULL))) ) ;"
+        },
+        {
+          "description": "重複削除のため(FLG=2更新)",
+          "sql_query": "UPDATE [新規契約更新一覧] SET FLG = '2' WHERE ID IN ( SELECT MIN(ID) FROM [新規契約更新一覧] WHERE FLG = '1' GROUP BY IIF([契約者3入居有無] = '入居有り', [契約者3No], IIF([契約者2入居有無] = '入居有り', [契約者2No], IIF([契約者1入居有無] = '入居有り', [契約者1No], NULL))) );"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "特殊処理",
+          "sql_query": "UPDATE (Account AS T INNER JOIN [新規契約更新一覧] AS T1 ON ('R2_' & T1.[ID]) = T.ID) LEFT JOIN 契約者情報 AS T2 ON T2.[契約者No] = IIF(T1.[契約者3入居有無]='入居有り', T1.[契約者3No], IIF(T1.[契約者2入居有無]='入居有り', T1.[契約者2No], IIF(T1.[契約者1入居有無]='入居有り', T1.[契約者1No], NULL))) SET T.name_family = IIF(T2.[契約者区分]='法人', NULL, T2.[契約者名]), T.company_name = IIF(T2.[契約者区分]='個人', NULL, T2.[契約者名]), T.email = T2.[優先メール], T.tel_mobile = T2.[携帯1], T.kind_id = T2.[契約者区分] ;"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE (Account AS T INNER JOIN [新規契約更新一覧] AS T1 ON ('R2_' & T1.ID) = T.ID) SET T.legacy_id = IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) ;"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "建物",
+      "target_table": "Building",
+      "id_prefix": "B1_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "B1_' & T.ID",
+        "name": "T.[物件名]",
+        "legacy_id": "T.[物件No]",
+        "prefecture_code": "T.[都道府県名]",
+        "city_code": "T.[市区町村名]",
+        "address": "T.[町地域名] & T.[丁番地名] & T.[住所その他]",
+        "zip_code": "T.[郵便番号]",
+        "sheet": "建物"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新) - 重複削除 (データ順で１番最初のデータを出力対象とする)",
+          "sql_query": "UPDATE [入居状況一覧] SET FLG = '1' WHERE ID NOT IN ( SELECT MIN(ID) FROM [入居状況一覧] GROUP BY [物件No] ) ;"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "家主基本情報からの値の取得",
+          "sql_query": "UPDATE Building  As T INNER JOIN [物件基本情報] AS T2 ON T.legacy_id = T2.[物件No] SET T.station_name = T2.[交通沿線1駅名], T.walk_minute = T2.[交通沿線1徒歩(分)], T.built_year = Format(T2.[竣工日], 'yyyy'), T.built_month = Format(T2.[竣工日], 'mm'), T.floor = T2.[階建て], T.structure_id = T2.[構造], T.land_use_zone_id = IIF(Nz(T2.[用途地域], '') <> '', T2.[用途地域], '50') WHERE T.sheet = '建物' ;"
+        },
+        {
+          "description": "T_MAP mapping for structure_id",
+          "sql_query": "UPDATE Building  AS T INNER JOIN [T_MAP_structure_id_Building] AS M ON T.structure_id = M.[建物構造] SET T.structure_id = M.[ID] WHERE T.sheet = '建物' ;"
+        },
+        {
+          "description": "T_MAP mapping for land_use_zone_id",
+          "sql_query": "UPDATE Building  AS T INNER JOIN [T_MAP_land_use_zone_id_Building] AS M ON T.land_use_zone_id = M.[用途地域] SET T.land_use_zone_id = M.[ID] WHERE T.sheet = '建物' ;"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "建物（新規）",
+      "target_table": "Building",
+      "id_prefix": "B2_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "B2_' & T.ID",
+        "name": "T.[物件名]",
+        "legacy_id": "T.[物件No]",
+        "sheet": "建物（新規）"
+      },
+      "output_conditions": [
+        {
+          "description": "既存の物件と紐づくものを除外 (入居状況一覧に存在する物件Noを除外)",
+          "sql_query": "UPDATE [新規契約更新一覧] SET FLG = '1' WHERE ID NOT IN ( SELECT MIN(ID) FROM [新規契約更新一覧] GROUP BY [物件No] ) ;"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE [新規契約更新一覧] AS S INNER JOIN 入居状況一覧 AS T ON S.[物件No] = T.[物件No] SET S.[FLG] = '1' ;"
+        }
+      ],
+      "special_processing": []
+    },
+    {
+      "sheet_pattern": "契約",
+      "target_table": "Contract",
+      "id_prefix": "C1_",
+      "primary_source": "contract",
+      "normal_processing": {
+        "ID": "C1_' & T.ID",
+        "legacy_property_id": "T.[物件No] & '-' & T.[部屋No]",
+        "legacy_owner_id": "T.[家主No]",
+        "legacy_building_id": "T.[物件No]",
+        "start_from": "T.[初回契約始期]",
+        "end_until": "T.[契約終期]",
+        "corporate_guarantor_name": "T.[家賃保証会社名]",
+        "gas_contact_name": "T.[ガス業者名]",
+        "gas_contact_tel": "T.[ガス業者TEL1]",
+        "sheet": "契約"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新) - 契約状況が指定外のものを除外",
+          "sql_query": "UPDATE [入居状況一覧] SET FLG = '1' WHERE [契約状況] NOT IN ('契約中', '契約中(他社)', '解約予定')"
+        },
+        {
+          "description": "15 legacy_id（加工後）の重複削除 (取込データ順で1番最初の１行のみを出力)",
+          "sql_query": "DELETE FROM Contract WHERE sheet = '契約' AND legacy_id IS NOT NULL AND ID NOT IN ( SELECT 'C1_' & MIN(Val(Mid(T2.ID, 4))) FROM contract AS T2 WHERE T2.sheet = '契約' AND T2.legacy_id IS NOT NULL GROUP BY T2.legacy_id ) ;"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "1. 契約者3 の優先処理",
+          "sql_query": "UPDATE Contract  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) SET T.legacy_resident_id = T1.[契約者3No] WHERE T1.[契約者3入居有無] = '入居有り' ;"
+        },
+        {
+          "description": "2. 契約者2 の優先処理",
+          "sql_query": "UPDATE Contract  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) SET T.legacy_resident_id = T1.[契約者2No] WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' AND T1.[契約者2入居有無] = '入居有り' ;"
+        },
+        {
+          "description": "3. 契約者1 の優先処理",
+          "sql_query": "UPDATE Contract  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) SET T.legacy_resident_id = T1.[契約者1No] WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' AND Nz(T1.[契約者2入居有無],'') <> '入居有り' AND T1.[契約者1入居有無] = '入居有り' ;"
+        },
+        {
+          "description": "4. ダミー契約者(ohta) の処理",
+          "sql_query": "UPDATE Contract  As T INNER JOIN [入居状況一覧] AS T1 ON T.ID = ('C1_' & T1.ID) SET T.legacy_resident_id = 'ohta' WHERE Nz(T1.[契約者3入居有無],'') <> '入居有り' AND Nz(T1.[契約者2入居有無],'') <> '入居有り' AND Nz(T1.[契約者1入居有無],'') <> '入居有り' AND T1.[契約状況] = '契約中(他社)' ;"
+        },
+        {
+          "description": "5. start_from (初回契約始期 -> そのまま / 契約中(他社) -> 2026/01/01)",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) SET T.start_from = I.[初回契約始期] WHERE T.sheet = '契約' AND I.[初回契約始期] IS NOT NULL ;"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) SET T.start_from = #2026/01/01# WHERE T.sheet = '契約' AND I.[契約状況] = '契約中(他社)' ;"
+        },
+        {
+          "description": "TODO: 紐づけ元のフィールド名が未定義のため、[SOURCE_FIELD]を適切な列名に書き換えてください",
+          "sql_query": "UPDATE (contract As T INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) INNER JOIN [物件管理情報一覧] AS T2 ON T2.[物件No] = T1.[物件No] SET T.sublease = '1' WHERE T2.[管理形態] = '一括借上' AND T.sheet = '契約' ;"
+        },
+        {
+          "description": "TODO: 紐づけ元のフィールド名が未定義のため、[SOURCE_FIELD]を適切な列名に書き換えてください",
+          "sql_query": "UPDATE (contract As T INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) INNER JOIN [契約情報一覧] AS T3 ON T3.[物件No] = T1.[物件No] AND T3.[部 屋] = T1.[部屋No] SET T.legacy_contractor_id = IIf(T.[legacy_resident_id] <> T3.[契約者No], T3.[契約者No], NULL) WHERE T.sheet = '契約' ;"
+        },
+        {
+          "description": "JOIN条件の「legacy_resident_id」に対応する解約情報一覧側のフィールドも [JOIN_FIELD] を書き換えてください。",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) INNER JOIN [解約情報一覧] AS T4 ON T4.[物件No] = T1.[物件No] AND T4.[部 屋] = T1.[部屋No] AND T4.[契約者No] = T.[legacy_resident_id] SET T.end_date = T4.[受付・立会情報 解約日] WHERE T.sheet = '契約' ;"
+        },
+        {
+          "description": "9. legacy_id の生成 (legacy_contractor_idがブランクではない場合)",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) SET T.legacy_id = IIf(Nz(T.legacy_contractor_id,'') <> '', T1.[物件No] & '-' & T1.[部屋No] & '-' & T.legacy_contractor_id, T1.[物件No] & '-' & T1.[部屋No] & '-' & T.legacy_resident_id) WHERE T.sheet = '契約' ;"
+        },
+        {
+          "description": "electricity_contact_tel",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) SET T.electricity_contact_name = T1.[電気業者名], T.electricity_contact_tel = T1.[電気業者TEL1] WHERE T1.[電気業者名] NOT LIKE '*電気 家主一括契約*' AND T1.[電気業者名] NOT LIKE '*水道 家主一括契約*' ;"
+        },
+        {
+          "description": "drink_water_contact_tel",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS T1 ON T.[ID] = ('C1_' & T1.[ID])) SET T.drink_water_contact_name = T1.[上水道業者名], T.drink_water_contact_tel = T1.[上水道業者TEL1] WHERE T1.[上水道業者名] NOT LIKE '*水道 家主一括契約*' ;"
+        },
+        {
+          "description": "12. kind_id",
+          "sql_query": "UPDATE (((contract AS T INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) INNER JOIN [契約情報一覧] AS K ON I.[物件No] = K.[物件No] AND I.[部屋No] = K.[部 屋] AND I.[初回契約始期] = K.[契約始期]) INNER JOIN [契約者情報] AS C ON K.[契約者No] = C.[契約者No]) SET T.kind_id = IIF(C.[契約者区分] = '法人', '20', IIF(C.[契約者区分] = '個人', '10', T.kind_id)) WHERE T.sheet = '契約' ;"
+        },
+        {
+          "description": "13 kind_id (契約中(他社) -> 10)",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) SET T.kind_id = '10' WHERE T.sheet = '契約' AND I.[契約状況] = '契約中(他社)';"
+        },
+        {
+          "description": "14. end_until (契約終期 -> そのまま / 契約中(他社) -> 9999/12/31)",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) SET T.end_until = I.[契約終期] WHERE T.sheet = '契約' AND I.[契約終期] IS NOT NULL ;"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE (contract AS T INNER JOIN [入居状況一覧] AS I ON T.ID = ('C1_' & I.ID)) SET T.end_until = #9999/12/31# WHERE T.sheet = '契約' AND I.[契約状況] = '契約中(他社)' ;"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "契約（新規）",
+      "target_table": "Contract",
+      "id_prefix": "C2_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "C2_' & T.ID",
+        "legacy_property_id": "T.[物件No] & '-' & T.[部屋No]",
+        "legacy_owner_id": "T.[貸主No]",
+        "legacy_building_id": "T.[物件No]",
+        "start_from": "T.[契約始期]",
+        "end_until": "T.[契約終期]",
+        "corporate_guarantor_name": "T.[家賃保証会社名]",
+        "legacy_id": "T.[物件No] & '-' & T.[部屋No] & '-' & T.[契約者No]",
+        "sheet": "契約（新規）"
+      },
+      "output_conditions": [
+        {
+          "description": "既存の入居状況と紐づくものを除外(物件No/部屋No/契約者NoでFLG=1更新)",
+          "sql_query": "UPDATE [新規契約更新一覧] AS T SET T.FLG = '1' WHERE NOT EXISTS ( SELECT 1 FROM [入居状況一覧] AS T1 WHERE T1.[物件No] = T.[物件No] AND T1.[部屋No] = T.[部屋No] AND IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) = IIF(T.[契約者3入居有無] = '入居有り', T.[契約者3No], IIF(T.[契約者2入居有無] = '入居有り', T.[契約者2No], IIF(T.[契約者1入居有無] = '入居有り', T.[契約者1No], NULL))) ) ;"
+        },
+        {
+          "description": "重複削除のため(FLG=2更新)",
+          "sql_query": "UPDATE [新規契約更新一覧] SET FLG = '2' WHERE ID IN ( SELECT MIN(ID) FROM [新規契約更新一覧] WHERE FLG = '1' GROUP BY IIF([契約者3入居有無] = '入居有り', [契約者3No], IIF([契約者2入居有無] = '入居有り', [契約者2No], IIF([契約者1入居有無] = '入居有り', [契約者1No], NULL))) );"
+        },
+        {
+          "description": "set_charge (set charge = 0)",
+          "sql_query": "UPDATE [契約情報一覧] AS S INNER JOIN [入居状況一覧] AS T ON T.[物件No] = S.[物件No] AND T.[部屋No] = S.[部 屋] AND T.[初回契約始期] = S.[契約始期] SET S.[FLG] = '1';"
+        },
+        {
+          "description": "Execute SQL",
+          "sql_query": "UPDATE Contract  AS S SET S.charge_rent = '0', S.charge_management = '0', S.charge_parking = '0', S.charge_additional = '0', S.charge_deposit = '0', S.charge_gratuity = '0' WHERE S.[ID] LIKE 'C1_%' AND NOT EXISTS ( SELECT 1 FROM [契約情報一覧] AS T WHERE T.[契約者No] = S.[legacy_resident_id] AND T.[FLG] = '1' );"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "特殊処理",
+          "sql_query": "UPDATE (Contract AS T INNER JOIN [新規契約更新一覧] AS T1 ON ('C2_' & T1.ID) = T.ID) SET T.legacy_resident_id = IIF(T1.[契約者3入居有無] = '入居有り', T1.[契約者3No], IIF(T1.[契約者2入居有無] = '入居有り', T1.[契約者2No], IIF(T1.[契約者1入居有無] = '入居有り', T1.[契約者1No], NULL))) ;"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "契約者",
+      "target_table": "Contractor",
+      "id_prefix": "CR_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "CR_' & T.ID",
+        "name": "T.[契約者名(SJIS)]",
+        "legacy_id": "T.[契約者No]",
+        "sheet": "契約者"
+      },
+      "output_conditions": [
+        {
+          "description": "GMO入居状況一覧.csvと契約情報一覧.csvのマージ",
+          "sql_query": "UPDATE [契約情報一覧] AS S INNER JOIN [入居状況一覧] AS T ON S.[物件No] = T.[物件No] AND S.[部 屋] = T.[部屋No] AND S.[契約始期] = T.[初回契約始期] SET S.FLG = '1' ;"
+        },
+        {
+          "description": "契約情報一覧.csvと契約者情報.csvのマージ",
+          "sql_query": "UPDATE [契約者情報] AS S INNER JOIN [契約情報一覧] AS T ON S.[契約者No] = T.[契約者No] SET S.FLG = '1' ;"
+        },
+        {
+          "description": "出力条件 契約情報一覧",
+          "sql_query": "UPDATE [契約者情報] SET FLG = '0' WHERE ID NOT IN ( SELECT MIN(ID) FROM [契約者情報] GROUP BY [契約者No] ) ;"
+        },
+        {
+          "description": "契約者情報.csvのマージ (email, tel_mobile, kind_id の取得)",
+          "sql_query": "UPDATE (contractor AS T INNER JOIN [契約情報一覧] AS T1 ON T.ID = ('CR_' & T1.ID)) INNER JOIN [契約者情報] AS T2 ON T1.[契約者No] = T2.[契約者No] SET T.kind_id = T2.[契約者区分], T.email = T2.[優先メール], T.tel_mobile = T2.[携帯1] WHERE T2.[FLG] = '1' ;"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "T_MAP mapping for kind_id",
+          "sql_query": "UPDATE Contractor  AS T INNER JOIN [T_MAP_kind_id_Contractor] AS M ON T.kind_id = M.[個人法人区分] SET T.kind_id = M.[kind_id] WHERE T.sheet = '契約者';"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "部屋",
+      "target_table": "Property",
+      "id_prefix": "P1_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "P1_' & T.ID",
+        "legacy_owner_id": "T.[家主No]",
+        "legacy_building_id": "T.[物件No]",
+        "name": "T.[部屋No]",
+        "zip_code": "T.[郵便番号]",
+        "prefecture_code": "T.[都道府県名]",
+        "city_code": "T.[市区町村名]",
+        "address_1": "Nz(T.[町地域名],'') & Nz(T.[丁番地名],'') & Nz(T.[住所その他],'')",
+        "kind_id": "T.[部屋分類]",
+        "legacy_id": "T.[物件No] & '-' & T.[部屋No]",
+        "sheet": "部屋"
+      },
+      "output_conditions": [
+        {
+          "description": "不要行を削除するため(FLG=1更新) - 重複削除 (データ順で１番最初のデータを出力対象とする)",
+          "sql_query": "UPDATE [入居状況一覧] SET FLG = '1' WHERE ID NOT IN ( SELECT MIN(ID) FROM [入居状況一覧] GROUP BY [物件No], [部屋No] ) ;"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "T_MAP mapping for kind_id",
+          "sql_query": "UPDATE Property  AS T INNER JOIN [T_MAP_kind_id_Property] AS M ON T.kind_id = M.[種別] SET T.kind_id = M.[ID] WHERE T.sheet = '部屋' ;"
+        }
+      ]
+    },
+    {
+      "sheet_pattern": "部屋（新規）",
+      "target_table": "Property",
+      "id_prefix": "P2_",
+      "primary_source": "UnknownSource",
+      "normal_processing": {
+        "ID": "P2_' & T.ID",
+        "legacy_owner_id": "T.[貸主No]",
+        "legacy_building_id": "T.[物件No]",
+        "name": "T.[部屋No]",
+        "legacy_id": "T.[物件No] & '-' & T.[部屋No]",
+        "sheet": "部屋（新規）"
+      },
+      "output_conditions": [
+        {
+          "description": "既存の部屋と紐づくものを除外 (入居状況一覧に存在する 物件No + 部屋No を除外)",
+          "sql_query": "UPDATE [新規契約更新一覧] As T SET T.FLG = '1' WHERE T.[物件No] & '-' & T.[部屋No] IN ( SELECT T1.[物件No] & '-' & T1.[部屋No] FROM [入居状況一覧] AS T1 WHERE T1.[物件No] IS NOT NULL ) ;"
+        },
+        {
+          "description": "不要行を削除するため(FLG=1更新) - 重複削除 (データ順で１番最初のデータ1件のみを採用)",
+          "sql_query": "UPDATE [新規契約更新一覧] SET FLG = '1' WHERE FLG = '0' AND ID NOT IN ( SELECT MIN(ID) FROM [新規契約更新一覧] GROUP BY [物件No], [部屋No] ) ;"
+        }
+      ],
+      "special_processing": [
+        {
+          "description": "kind_id: \"P\"もしくは\"駐\"が含まれていない場合",
+          "sql_query": "UPDATE Property  As T INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('P2_' & T1.ID) SET T.kind_id = '10' WHERE T1.[部屋No] NOT LIKE '*P*' AND T1.[部屋No] NOT LIKE '*駐*' ;"
+        },
+        {
+          "description": "kind_id: \"P\"もしくは\"駐\"が含まれる場合",
+          "sql_query": "UPDATE Property  As T INNER JOIN [新規契約更新一覧] AS T1 ON T.ID = ('P2_' & T1.ID) SET T.kind_id = '20' WHERE T1.[部屋No] LIKE '*P*' OR T1.[部屋No] LIKE '*駐*' ;"
+        }
+      ]
+    }
+  ]
+}
