@@ -214,8 +214,11 @@ def main():
     while i < len(raw_args):
         arg = raw_args[i]
         lower_arg = arg.lower()
-        if lower_arg in ("scan", "compile", "run", "all"):
-            command = lower_arg
+        
+        # Hỗ trợ cả trường hợp người dùng gõ dư dấu '--' (ví dụ: --scan, --compile)
+        cmd_stripped = lower_arg.lstrip("-")
+        if cmd_stripped in ("scan", "compile", "run", "all"):
+            command = cmd_stripped
         elif arg == "--file":
             if i + 1 < len(raw_args):
                 only_file = raw_args[i+1]
