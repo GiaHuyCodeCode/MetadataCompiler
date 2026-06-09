@@ -205,25 +205,21 @@ def main():
         print(__doc__)
         sys.exit(0)
 
-    command = raw_args[0].lower() if raw_args else "run"
-    
+    command = "run"
     folder = ""
     only_file = ""
     use_agent = False
     
-    args_to_check = raw_args[1:]
-    if command.startswith("--"):
-        args_to_check = raw_args
-        command = "run"
-        
     i = 0
-    while i < len(args_to_check):
-        arg = args_to_check[i]
-        if arg == "--file":
-            if i + 1 < len(args_to_check):
-                only_file = args_to_check[i+1]
-                i += 2
-                continue
+    while i < len(raw_args):
+        arg = raw_args[i]
+        lower_arg = arg.lower()
+        if lower_arg in ("scan", "compile", "run", "all"):
+            command = lower_arg
+        elif arg == "--file":
+            if i + 1 < len(raw_args):
+                only_file = raw_args[i+1]
+                i += 1
         elif arg == "--agent":
             use_agent = True
         elif arg.startswith("--"):
