@@ -21,112 +21,18 @@
 Gửi câu lệnh prompt chuẩn cho Agent (bắt đầu tiến trình sinh code hoặc review):
 
 **Cho 1 file (Cần Approval):**
-> "Hãy generate/review code VBA cho sheet `[Tên Sheet]` ở thư mục `[Tên thư mục test]`. Yêu cầu tuân thủ nghiêm ngặt các quy tắc trong `SKILL.md`, đặc biệt là các quy tắc về tối ưu Production. Bắt buộc phải lập Implementation Plan chờ duyệt, và sau khi được duyệt, phải in ra Checklist & Chứng minh đầy đủ trước khi xuất khối code VBA chất lượng ra bên ngoài."
+> "Hãy generate/review code VBA cho sheet `[Tên Sheet]` ở thư mục `[Tên thư mục test]`. Yêu cầu tuân thủ nghiêm ngặt các quy tắc trong `agents/sk-architect/SKILL.md`, đặc biệt là các quy tắc về tối ưu Production. Bắt buộc phải lập Implementation Plan chờ duyệt, và sau khi được duyệt, phải in ra Checklist & Chứng minh đầy đủ trước khi xuất khối code VBA chất lượng ra bên ngoài."
 
 **Cho thực thi HÀNG LOẠT (Bỏ qua Approval):**
-> "Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `[Tên thư mục test]` so với spec `sheet_raw.json`. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và `SKILL.md`. Bắt buộc vẫn phải tự rà soát Checklist (Bước 5.4) trước khi hoàn tất mỗi file."
+> "Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `[Tên thư mục test]` so với spec `sheet_raw.json`. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và `agents/sk-architect/SKILL.md`. Bắt buộc vẫn phải tự rà soát Checklist (Bước 4.3) trước khi hoàn tất mỗi file."
+
+> **⚠️ CẢNH BÁO CRITICAL:**
+> **KHÔNG BAO GIỜ** được chạy lại lệnh `python3 main.py --compile` hoặc `run` bằng terminal SAU KHI bạn đã thực hiện Bước 3 (nhờ AI Agent review/sửa code). 
+> Lệnh `compile` của Python chỉ dùng để tạo bộ khung ban đầu. Nếu chạy lại, nó sẽ **ghi đè và xóa sạch toàn bộ** những logic phức tạp mà AI Agent vừa sửa tay trực tiếp trong file `.bas`, khiến đoạn code trở về trạng thái lỗi cũ (rất vô nghĩa và mất công).
 
 ---
 
-## BƯỚC 4 — AGENT ĐỌC SPEC & TẠO `summary_sheet.json`
-
-### 4.1 Mục tiêu
-
-Đọc file `sheet_raw.json` (hoặc `sheet_spec.json`) trong thư mục output của sheet cần xử lý.  
-Tổng hợp nội dung thành file `summary_sheet.json` — chỉ giữ **4 section chính** và các **câu sentences tổng hợp** (không liệt kê raw data row).
-
-### 4.2 Cấu trúc `summary_sheet.json` bắt buộc
-
-```json
-{
-  "_meta": {
-    "sheet_name": "<tên sheet>",
-    "target_table": "<tên bảng đích VBA>",
-    "id_prefix": "<prefix ID, ví dụ: Y_>",
-    "primary_source": "<bảng nguồn chính>"
-  },
-  "ファイル名": {
-    "sentence": "<tên file CSV/xlsx dùng làm nguồn dữ liệu>"
-  },
-  "出力条件": {
-    "sentences": [
-      "<câu mô tả điều kiện lọc 1>",
-      "<câu mô tả điều kiện lọc 2>"
-    ]
-  },
-  "通常処理": {
-    "sentences": [
-      "<câu mô tả mapping field thông thường>"
-    ]
-  },
-  "特殊処理": {
-    "sentences": [
-      "<câu mô tả nhóm xử lý đặc biệt 1>",
-      "<câu mô tả nhóm xử lý đặc biệt 2>"
-    ]
-  }
-}
-```
-
-### 4.3 Quy tắc tổng hợp sentences
-
-| Section | Quy tắc |
-|---------|---------|
-| `出力条件` | Mỗi nhóm lọc → 1 câu ngắn mô tả mục đích + điều kiện (ví dụ: *"契約状況が「契約中」または「解約予定」のみを対象とする"*) |
-| `通常処理` | Liệt kê các field có `処理: 固定値出力` hoặc `DIRECT_MAPPING` thành 1 câu INSERT tổng quát |
-| `特殊処理` | Nhóm các rows có cùng `条件 / 項目マッピング` vào 1 câu. Bỏ qua `is_active: False` và `処理: 項目マッピング` |
-
-### 4.4 Ví dụ — `アカウント（入居者）_Y`
-
-```json
-{
-  "_meta": {
-    "sheet_name": "アカウント（入居者）_Y",
-    "target_table": "Account",
-    "id_prefix": "Y_",
-    "primary_source": "入居状況一覧"
-  },
-  "ファイル名": {
-    "sentence": "GMO 入居状況一覧.csv を使用する"
-  },
-  "出力条件": {
-    "sentences": [
-      "入居状況一覧の「契約状況」が「契約中」または「解約予定」のレコードのみを出力対象とし、それ以外はFLGで除外する（IN_LIST_FILTER / FLG Logic Ngược）"
-    ]
-  },
-  "通常処理": {
-    "sentences": [
-      "AccountテーブルにID='Y_'+T.ID、klass='Resident'、legacy_charge_user_id='gmo002'、sheet='アカウント（入居者）_Y' を固定値でINSERTする"
-    ]
-  },
-  "特殊処理": {
-    "sentences": [
-      "【優先順位①: 契約者1が個人かつ2人とも入居有り】name_family, company_name, name_family_kana, company_name_kana, email, tel_fixed, tel_mobile, kind_id, birthday を契約者1（列番号_33/_35/_36/_38/_39/_40/_42）から更新する",
-      "【優先順位②: 契約者3が入居有り（上記以外）】同フィールドを契約者3（列番号_53/_55/_56/_58/_59/_60/_62）から更新する",
-      "【優先順位③: 契約者2が入居有り（上記以外）】同フィールドを契約者2（列番号_43/_45/_46/_48/_49/_50/_52）から更新する",
-      "【優先順位④: いずれにも該当しない場合】契約者1のデータ（デフォルト）を使用する",
-      "【個人・法人区分による後処理】個人の場合: company_name / company_name_kana をNULLクリア。法人の場合: name_family / name_family_kana をNULLクリア",
-      "【kind_id変換】kind_idが'個人'の場合→'10'、'法人'の場合→'20' に変換する",
-      "【tag】契約状況が'解約予定'の場合、tagフィールドに'解約予定'をセットする"
-    ]
-  }
-}
-```
-
----
-
-## BƯỚC 5 — TRA CỨU DICTIONARY & SINH CODE VBA
-
-### 5.1 Tra cứu `sample/dictionary_proccess.json`
-
-1. Tìm entry có `sheet_pattern` khớp với tên sheet đang xử lý.
-2. Nếu **tìm thấy**: sử dụng `output_conditions`, `special_processing` trong dictionary làm **tham chiếu SQL pattern**.
-3. Nếu **không tìm thấy**: chuyển sang bước 5.2 để sinh code thuần từ spec.
-
-> **Lưu ý:** Dictionary chứa SQL tham chiếu — có thể thiếu điều kiện SWITCH hoặc có placeholder rỗng.  
-> Bắt buộc xác minh lại với `summary_sheet.json` và các skill rules trước khi dùng.
-
-### 5.2 Áp dụng skill rules (bắt buộc kết hợp)
+### 4.1 Áp dụng skill rules (bắt buộc kết hợp)
 
 | File | Vai trò |
 |------|---------|
@@ -134,12 +40,12 @@ Tổng hợp nội dung thành file `summary_sheet.json` — chỉ giữ **4 sec
 | `agents/sk-architect/SKILL.md` | Pattern chi tiết cho từng `ast_type`, FLG workflow, SWITCH, Dim con |
 | `agents/sk-standard/SKILL.md` | Quality gate, tiêu chuẩn naming, logging, cleanup checklist |
 
-### 5.3 Quy trình sinh code VBA — Step by step
+### 4.2 Quy trình sinh code VBA — Step by step
 
 ```
 
 
-Step 2 — PER SECTION (lặp cho từng section trong summary_sheet.json)
+Step 2 — PER SECTION (lặp cho từng section trong sheet_raw.json)
   ├─ '======================================================================
   ├─ '<sheet_name>
   ├─ '======================================================================
@@ -184,7 +90,7 @@ Step 3 — FOOTER
   └─ log_write "set_<table>:out"
 ```
 
-### 5.4 Checklist bắt buộc trước khi xuất code
+### 4.3 Checklist bắt buộc trước khi xuất code
 
 - [ ] Có section separator `'====...`
 - [ ] SQL build bằng `SQL = SQL &` (không hardcode 1 dòng)
@@ -201,26 +107,10 @@ Step 3 — FOOTER
 - [ ] Không tự suy đoán business logic ngoài spec
 - [ ] Tên Sub: `set_account()` (lowercase)
 
-### 5.5 Ví dụ output — `アカウント（入居者）_Y` (trích)
+### 4.4 Ví dụ output — `アカウント（入居者）_Y` (trích)
 
 ```vba
-Attribute VB_Name = "アカウント（入居者）_Y"
-Option Compare Database
-Option Explicit
 
-Sub set_account()
-    log_write "set_account:in"
-
-    Dim t As Single
-    t = Timer
-
-    Dim db As ADODB.Connection
-    Dim SQL As String
-
-    Set db = CurrentProject.Connection
-
-    db.Execute "DELETE FROM Account WHERE ID LIKE 'Y_%';"
-    log_write "account delete"
 
     '================================================================================
     'アカウント（入居者）_Y
@@ -310,24 +200,18 @@ Sub set_account()
     '■項目削除
     DeleteFieldInTable "[入居状況一覧]", "FLG"
 
-    chk_required
-
-    Debug.Print "Account:" & Timer - t
-    log_write "set_account:out"
-
-End Sub
 ```
 
 ---
 
-## BƯỚC 6 — SO SÁNH VÀ TẠO FILE NHẬN XÉT `review_report.md`
+## BƯỚC 5 — SO SÁNH VÀ TẠO FILE NHẬN XÉT `review_report.md`
 
-### 6.1 Mục tiêu
+### 5.1 Mục tiêu
 
-So sánh code VBA đã sinh (`.bas`) với spec JSON (`summary_sheet.json`) và file dictionary.  
+So sánh code VBA đã sinh (`.bas`) với spec JSON (`sheet_raw.json`) và file dictionary.  
 Xuất file `review_report.md` với đánh giá chi tiết theo từng hạng mục.
 
-### 6.2 Cấu trúc `review_report.md`
+### 5.2 Cấu trúc `review_report.md`
 
 ```markdown
 # Review Report: <sheet_name>
@@ -399,7 +283,7 @@ Xuất file `review_report.md` với đánh giá chi tiết theo từng hạng m
 **Các bước tiếp theo:** ...
 ```
 
-### 6.3 Tiêu chí đánh giá
+### 5.3 Tiêu chí đánh giá
 
 | Hạng mục | Mức độ | Điểm |
 |----------|--------|------|
@@ -414,16 +298,16 @@ Xuất file `review_report.md` với đánh giá chi tiết theo từng hạng m
 
 ---
 
-## BƯỚC 7 — CHỈNH SỬA CODE SAU REVIEW (AUTO-FIX)
+## BƯỚC 6 — CHỈNH SỬA CODE SAU REVIEW (AUTO-FIX)
 
-### 7.1 Mục tiêu
-Sử dụng Agent để rà soát code VBA (do pipeline sinh ra) với Spec JSON, sau đó tự động sửa các điểm chưa chính xác nhằm đảm bảo code khớp 100% với nghiệp vụ và `SKILL.md`.
+### 6.1 Mục tiêu
+Sử dụng Agent để rà soát code VBA (do pipeline sinh ra) với Spec JSON, sau đó tự động sửa các điểm chưa chính xác nhằm đảm bảo code khớp 100% với nghiệp vụ và `agents/sk-architect/SKILL.md`.
 
-### 7.2 Quy trình thực hiện
+### 6.2 Quy trình thực hiện
 1. **Đọc Spec và Code:** Agent đọc file `sheet_raw.json` và file `.bas` hiện tại của sheet.
 2. **Phân tích sai lệch (Gap Analysis):** Agent tự phát hiện các lỗi logic (thiếu JOIN, xử lý sai Hyphen, thiếu field, sai ưu tiên Dim con...). Có thể ghi chú nhanh hoặc tạo `review_report.md`.
 3. **Chỉnh sửa Code (Auto-Fix):** Agent tiến hành sửa trực tiếp file `.bas`.
-4. **Chạy Checklist (Bắt buộc):** Bất kể chế độ nào, Agent phải đảm bảo các mục trong Checklist (Bước 5.4) đều được pass.
+4. **Chạy Checklist (Bắt buộc):** Bất kể chế độ nào, Agent phải đảm bảo các mục trong Checklist (Bước 4.3) đều được pass.
 5. **Chế độ Hàng loạt (Bulk Mode):** 
    - Nếu user gọi thực hiện hàng loạt nhiều file, Agent **không cần** dừng lại hỏi Approve / Implementation Plan.
    - Tiến hành lặp lại quy trình [Đọc $\rightarrow$ Phân tích $\rightarrow$ Sửa $\rightarrow$ Checklist] cho từng file một cách tự động và liên tục cho đến khi hoàn thành.

@@ -47,7 +47,7 @@ Tuân thủ nghiêm ngặt template và best practices. Chỉ dùng thông tin t
 8. Tránh subquery phức tạp trong `出力条件` — dùng UPDATE riêng với FLG.
 9. Không được Self-Join.
 10. Table Name nào đứng trước sẽ được ưu tiên hơn Table Name đứng sau khi Join.
-11. Bảng GMO 入居状況一覧 khi sử dụng thì chỉ giữ lại 入居状況一覧 (bắt buộc).
+11. Bảng GMO 入居状況一覧, 【GMO用】新規契約更新一覧  khi sử dụng thì chỉ giữ lại 入居状況一覧 , 新規契約更新一覧  (bắt buộc).
 12. Sủ dụng % thay vì * khi tạo LIKE hoặc NOT LIKE trong SQL (vd: T.[FieldName] LIKE '%pattern%'). 
 13. Đa phần sử dụng FLG Logic (99%), 1% còn lại mới sử dụng FLg Logic ngược. 
 14. Nếu đã gắn field `ID` với prefix thì khi xết các điều kiện như dedup hoặc like thì phải đính kèm lọc các phần có gắn prefix chứ không được lọc toàn bộ ID.
@@ -77,31 +77,12 @@ Tuân thủ nghiêm ngặt template và best practices. Chỉ dùng thông tin t
 
 ---
 
-## 4. CẤU TRÚC SUB CHUẨN (BẮT BUỘC)
+## 4. QUY TẮC KHÔNG SINH HEADER / FOOTER
 
-
-### 4.2 Footer
-
-```vba
-    chk_required
-
-    Debug.Print "[table]:" & Timer - t
-    log_write "set_[target_table]:out"
-
-End Sub
-```
-
-- `chk_required` gọi **MỘT LẦN DUY NHẤT** cuối Sub, sau tất cả sections.
-
-### 4.3 Section separator
-
-```vba
-    '================================================================================
-    'SheetName（説明）
-    '================================================================================
-```
-
----
+> **⚠️ TUYỆT ĐỐI KHÔNG SINH CÁC THÀNH PHẦN SAU:**
+> 1. KHÔNG sinh phần Header (ví dụ: `Attribute VB_Name`, `Option Explicit`, `Sub set_xxx()`, `Dim db`, `Set db`, `DELETE FROM` ban đầu).
+> 2. KHÔNG sinh phần Footer (ví dụ: `chk_required`, `Debug.Print`, `End Sub`).
+> 3. CHỈ SINH phần thân (Logic SQL cốt lõi: Tạo FLG, Điều kiện loại trừ, Insert/Update xử lý). Hệ thống Native Python Compiler đã tự động gộp phần boilerplate (Header/Footer) rồi.
 
 ## 5. CHI TIẾT TỪNG PHẦN XỬ LÝ
 
@@ -384,6 +365,23 @@ db.Execute SQL
 
 ### E. 特殊処理 (UPDATE đặc biệt sau INSERT)
 
+**⓪ Bắt buộc comment tóm tắt logic xử lý:**
+Trước khi bắt đầu các khối lệnh SQL trong `特殊処理`, bắt buộc phải có các dòng comment (`'`) liệt kê tóm tắt các trường sẽ được update và điều kiện tương ứng (nếu có) dựa trên JSON spec.
+Ví dụ:
+```vba
+    '特殊処理
+    'name_family, kind_id, name_family_kana, name_first, name_first_kana -> "個人"の場合
+    'company_name, kind_id, company_name_kana -> "法人"の場合
+    'tag
+    '解約情報にデータがある入居者は退去済
+```
+
+**① Chiến lược gom nhóm (Grouping Strategies):**
+Mọi quyết định gom nhóm bằng `WHERE` hay `SWITCH` đều phải được cấu hình tại `sample/semantic_dictionary.json` dưới mục `grouping_strategies`:
+- `condition_based_where`: Gom nhóm các trường có chung một điều kiện cụ thể (ví dụ: `"個人"の場合`) thành một lệnh `UPDATE ... WHERE`.
+- `field_based_switch`: Gom tất cả các điều kiện của một trường (ví dụ: `tag`, `sublease`) thành một lệnh `UPDATE ... SWITCH`.
+Tuyệt đối không tự ý quyết định thuật toán gom nhóm mà không tra cứu dictionary. Tương tự, Native Compiler cũng đọc rules này để sinh code tự động.
+
 **① WHERE LIKE / NOT LIKE (`UPDATE_LIKE`):**
 ```vba
 'field_name -> "会社"を含まない場合
@@ -575,7 +573,7 @@ SQL = SQL & "WHERE condition; "
 db.Execute SQL
 ```
 
-**⑧ DELETE dedup sau INSERT:**
+**⑧ DELETE dedup:**
 ```vba
 SQL = ""
 SQL = SQL & "DELETE FROM [TargetTable] "
@@ -644,7 +642,6 @@ Step 2 — PER SECTION (repeat cho mỗi sheet nguồn):
   → DeleteFieldInTable (cleanup FLG)
 
 Step 3 — FOOTER:
-  → chk_required (MỘT LẦN DUY NHẤT)
   → Debug.Print "[table]:" & Timer - t
   → log_write "...:out"
 ```
@@ -655,12 +652,10 @@ Step 3 — FOOTER:
 
 | Quy tắc | Đúng | Sai |
 |---------|------|-----|
-| Tên Sub | `Sub set_account()` | `Sub set_Account()` |
 | Kết nối DB | `Set db = CurrentProject.Connection` | `Set db = New ADODB.Connection` |
 | Trường JP | `T.[フィールド名]` | `T.フィールド名` |
 | Delete FLG | `DeleteFieldInTable "Table", "FLG"` | `DeleteFieldFromTable ...` |
 | FLG type | `"TEXT(1)"` | `"TEXT"` |
-| chk_required | Cuối Sub, 1 lần | Trong từng section |
 | log_write format | `"set_[table]:[Section] → [説明]"` | `"set [table]: [section]"` |
 | Timer | `Dim t As Single` + `t = Timer` + `Debug.Print` | Thiếu timer |
 | DELETE target | Ngay sau `Set db`, trước DCount | Sau DCount hoặc thiếu |

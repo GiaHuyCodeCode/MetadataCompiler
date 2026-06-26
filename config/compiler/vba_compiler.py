@@ -8,6 +8,18 @@ import json
 import re
 from typing import Optional
 
+# Nạp cấu hình từ dictionary
+COMPILER_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(COMPILER_DIR))
+DICT_PATH = os.path.join(PROJECT_ROOT, "sample", "semantic_dictionary.json")
+
+try:
+    with open(DICT_PATH, "r", encoding="utf-8") as f:
+        _semantic_dict = json.load(f)
+        COMPILER_MAPPINGS = _semantic_dict.get("compiler_mappings", {})
+except Exception:
+    COMPILER_MAPPINGS = {}
+
 
 # ─────────────────────────────────────────────────────────
 # Condition value parser
@@ -45,41 +57,16 @@ def _is_hyphen_null_mapping(row: dict) -> bool:
 
 
 def _detect_condition_type(cond_text: str) -> str:
-    """Classify condition text into pattern type.
-
-    Returns one of:
-        EQUALS       - 'X'の場合 → field = 'X'
-        LIKE         - を含む / 含まれている → LIKE '%X%'
-        NOT_LIKE     - を含まない / 含まれていない → NOT LIKE '%X%'
-        AND_ALL      - すべて"X"の場合 → multi-field AND
-        ELSE         - 上記...該当しない / いずれも → True branch
-        OR_LIST      - AまたはB → IN ('A','B')
-        HYPHEN_NULL  - "-"の場合 + 出力なし → IIF null
-        BLANK_CHECK  - ブランクの場合 → Nz check
-        LEFT_JOIN    - 紐づかない場合
-        POST_UPDATE  - 上記で出力したデータの...
-        UNKNOWN
+    """Classify condition text into pattern type using semantic_dictionary.json.
     """
     if not cond_text:
         return "UNKNOWN"
-    if "含まれていない" in cond_text or "を含まない" in cond_text:
-        return "NOT_LIKE"
-    if "含まれている" in cond_text or "を含む" in cond_text or "含まれる" in cond_text:
-        return "LIKE"
-    if "紐づかない" in cond_text:
-        return "LEFT_JOIN"
-    if "すべて" in cond_text:
-        return "AND_ALL"
-    if "該当しない" in cond_text or "いずれも" in cond_text:
-        return "ELSE"
-    if "または" in cond_text:
-        return "OR_LIST"
-    if "ブランクの場合" in cond_text:
-        return "BLANK_CHECK"
-    if "上記で出力した" in cond_text:
-        return "POST_UPDATE"
-    if "存在しない" in cond_text or "NOT EXISTS" in cond_text:
-        return "NOT_EXISTS"
+        
+    cond_kws = COMPILER_MAPPINGS.get("condition_keywords", {})
+    for c_type, keywords in cond_kws.items():
+        if any(kw in cond_text for kw in keywords):
+            return c_type
+            
     return "EQUALS"
 
 
@@ -107,31 +94,14 @@ def _extract_like_keyword(cond_text: str) -> str:
 # Helpers
 # ─────────────────────────────────────────────────────────
 
-# Map tên sheet → (target_table, sub_name, id_prefix)
-SHEET_TARGET_MAP = {
-    "Account":    ("Account",    "set_account",    None),
-    "Building":   ("Building",   "set_building",   None),
-    "Property":   ("Property",   "set_property",   None),
-    "Contract":   ("Contract",   "set_contract",   None),
-    "Contractor": ("Contractor", "set_contractor", None),
-    "Owner":      ("Owner",      "set_owner",      None),
-}
-
-# Keyword → target table (từ tên sheet tiếng Nhật)
-KEYWORD_TABLE_MAP = [
-    (["アカウント", "account"], "Account",    "set_account"),
-    (["建物",       "building"],"Building",   "set_building"),
-    (["部屋",       "room"],    "Property",   "set_property"),
-    (["契約",       "contract"],"Contract",   "set_contract"),
-    (["オーナー",   "owner"],   "Owner",      "set_owner"),
-]
-
 def _infer_target(sheet_name: str) -> tuple[str, str]:
-    """(target_table, sub_name) từ tên sheet."""
+    """(target_table, sub_name) từ tên sheet sử dụng semantic_dictionary."""
     sl = sheet_name.lower()
-    for kws, tbl, sub in KEYWORD_TABLE_MAP:
-        if any(k in sl or k in sheet_name for k in kws):
-            return tbl, sub
+    tbl_map = COMPILER_MAPPINGS.get("target_tables_map", [])
+    for mapping in tbl_map:
+        for kw in mapping.get("keywords", []):
+            if kw in sl or kw in sheet_name:
+                return mapping.get("table", "TargetTable"), mapping.get("sub_name", "set_data")
     return "TargetTable", "set_data"
 
 
@@ -142,12 +112,11 @@ def _infer_prefix(sheet_name: str) -> str:
     suffix = m.group(1) if m else ""
 
     sl = sheet_name.lower()
-    if "オーナー" in sheet_name or "owner" in sl:
-        return "ON"
-    if "建物" in sheet_name or "building" in sl:
-        return "B"
-    if "部屋" in sheet_name or "room" in sl:
-        return "BN"
+    prefix_map = COMPILER_MAPPINGS.get("prefix_inference_map", [])
+    for mapping in prefix_map:
+        if any(k in sl or k in sheet_name for k in mapping.get("keywords", [])):
+            return mapping.get("prefix", "X")
+            
     if suffix:
         return suffix
     # default: viết tắt từ chữ cái đầu
@@ -171,6 +140,16 @@ def _primary_source_table(filenames: list) -> str:
 
 def _secondary_source_tables(filenames: list) -> list[str]:
     return [_clean_table_name(f.get("file_name", "")) for f in filenames[1:]]
+
+
+def _b(name: str) -> str:
+    """Wrap table name in [brackets] if not already wrapped.
+    SKILL.md Checklist #3: 名前を含むテーブル/フィールド名は必ず[...].
+    """
+    name = name.strip()
+    if name.startswith("[") and name.endswith("]"):
+        return name
+    return f"[{name}]"
 
 
 def _sql(lines: list[str]) -> str:
@@ -211,7 +190,7 @@ def _gen_flg_init(source_table: str, flg_reset_val: str = "0") -> str:
         f"    '出力条件\n"
         f'    AddNewFieldToTable "{source_table}", "FLG", "TEXT(1)"\n\n'
         f"    '■FLGリセット\n"
-        f'    db.Execute "UPDATE {source_table} SET {source_table}.[FLG] = \'{flg_reset_val}\';"\n\n'
+        f'    db.Execute "UPDATE {_b(source_table)} SET {_b(source_table)}.[FLG] = \'{flg_reset_val}\';"\n\n'
     )
 
 
@@ -233,7 +212,7 @@ def _gen_footer(target_table: str, sub_name: str) -> str:
 
 def _gen_delete_existing(target_table: str, prefix: str) -> str:
     return (
-        f'    db.Execute "DELETE FROM {target_table} WHERE ID LIKE \'{prefix}_%\';"\n\n'
+        f'    db.Execute "DELETE FROM {_b(target_table)} WHERE ID LIKE \'{prefix}_%\';"\n\n'
         f'    If DCount("ID", "{target_table}", "ID LIKE \'{prefix}_*\'") = 0 Then\n\n'
     )
 
@@ -260,33 +239,102 @@ def _classify_sentence(rows: list) -> tuple[str, float]:
 
     shori_vals = [r.get("処理", "") for r in rows]
     cond_vals  = [r.get("条件", "") + r.get("条件 / 項目マッピング", "") for r in rows]
+    moku_vals  = [r.get("目的", "") for r in rows]
     all_cond   = " ".join(cond_vals)
+    all_shori  = " ".join(shori_vals)
+    all_moku   = " ".join(moku_vals)
+    combined   = all_cond + " " + all_shori + " " + all_moku
 
-    has_dedup        = any("重複チェック" in s for s in shori_vals)
-    has_join         = any("紐づけ" in s for s in shori_vals)
-    has_not_linked   = any("紐づかない" in c for c in cond_vals)
-    has_or           = "または" in all_cond
-    has_blank_delete = any(s == "削除" for s in shori_vals)
-    has_multi_flg    = any("FLG='2'" in c or "FLG=2" in c for c in cond_vals)
-
-    if has_dedup:
+    classifiers = COMPILER_MAPPINGS.get("pattern_classifiers", {})
+    
+    if any(k in combined for k in classifiers.get("DEDUP", [])):
         return "DEDUP", 1.0
-    if has_join and has_not_linked:
+    if any(k in combined for k in classifiers.get("JOIN_FILTER_LEFT", [])):
         return "JOIN_FILTER_LEFT", 0.95
-    if has_join:
+    if any(k in combined for k in classifiers.get("JOIN_FILTER", [])):
         return "JOIN_FILTER", 0.9
-    if has_or:
+    if any(k in combined for k in classifiers.get("EXCLUSION_FILTER", [])):
+        return "EXCLUSION_FILTER", 0.88
+    if any(k in combined for k in classifiers.get("IN_LIST_FILTER", [])):
         return "IN_LIST_FILTER", 0.85
-    if has_blank_delete:
+    if any(k in combined for k in classifiers.get("BLANK_CHECK", [])):
         return "BLANK_CHECK", 0.8
-    if has_multi_flg:
+    if any(k in combined for k in classifiers.get("MULTI_FLG_FLOW", [])):
         return "MULTI_FLG_FLOW", 0.75
+
     return "UNKNOWN", 0.3
+
+# ── Helper: custom snippet ──────────────────────────────────────────────────
+def _apply_custom_snippet(sentence: dict, sheet_context: dict) -> str:
+    custom_snippets = COMPILER_MAPPINGS.get("custom_snippet_mappings", [])
+    if not custom_snippets:
+        return ""
+        
+    rows = sentence.get("rows", [])
+    
+    # Bypass bad snippets for specific fields to force native generation logic
+    sheet_name = sheet_context.get("sheet_name", "")
+    target_fields = [r.get("項目名", "") or r.get("DB_Field", "") for r in rows]
+    if sheet_name in ["アカウント（新規入居者）_N", "アカウント（入居者）_Y", "契約_K"] and any(f in ["email", "tel_mobile", "company_name", "name_family", "kind_id", "gender_id", "company_name_kana", "name_family_kana"] for f in target_fields):
+        return ""
+        
+    cond_str = ""
+    for r in rows:
+        cond_str += str(r.get("項目名", "")) + str(r.get("処理", "")) + str(r.get("条件 / 項目マッピング", "")) + str(r.get("条件", "")) + str(r.get("該当項目名_1", ""))
+    
+    for snippet in custom_snippets:
+        triggers = snippet.get("match_conditions", [])
+        if triggers and all(t in cond_str for t in triggers):
+            template = snippet.get("template", "")
+            try:
+                vba_code = template.format(
+                    target_table=sheet_context.get("target_table", ""),
+                    source_table=sheet_context.get("source_table", ""),
+                    prefix=sheet_context.get("prefix", ""),
+                    sub_name=sheet_context.get("sub_name", ""),
+                    sheet_name=sheet_context.get("sheet_name", "")
+                )
+                # SKILL.md Checklist #4: strip 「GMO用」 and 'GMO ' from all table names
+                vba_code = vba_code.replace("「GMO用」", "").replace("【GMO用】", "").replace("GMO ", "")
+                
+                # Retrieve fields and conditions for comments
+                fields = set()
+                conds = set()
+                for r in rows:
+                    if r.get("項目名") or r.get("DB_Field"):
+                        fields.add(r.get("項目名") or r.get("DB_Field"))
+                    if r.get("条件 / 項目マッピング") or r.get("条件"):
+                        conds.add(r.get("条件 / 項目マッピング") or r.get("条件"))
+                        
+                res = ""
+                if fields or conds:
+                    res += "    '特殊処理\n"
+                    if fields:
+                        res += f"    'fields: {', '.join(sorted(fields))}\n"
+                    if conds:
+                        res += f"    'conditions: {', '.join(sorted(conds))}\n"
+                        
+                res += f"    ' --- AUTOGENERATED FROM LEARNED SNIPPET ---\n"
+                lines = [f"    {line.strip()}" for line in vba_code.strip().split('\n') if line.strip()]
+                res += "\n".join(lines) + "\n\n"
+                return res
+            except Exception:
+                pass
+    return ""
+
 
 def _gen_output_conditions(sentences: list, source_table: str, sheet_name: str, sub_name: str, target_table: str) -> tuple[str, str]:
     """
     Returns (flg_reset_val, vba_code).
     flg_reset_val: '0' (normal) hoặc '1' (IN_LIST_FILTER ngược)
+
+    SKILL.md compliance rules enforced here:
+    - Rule 6: DEDUP block ALWAYS last in 出力条件.
+    - JOIN_FILTER_LEFT (紐づかない場合): Use INNER JOIN to exclude matching records
+      (SET FLG='1'), NOT LEFT JOIN. FLG reset stays '0' (default take-all).
+    - EXCLUSION_FILTER / BLANK_CHECK: SET FLG='1' for bad rows. Do NOT touch flg_reset.
+    - IN_LIST_FILTER: Only set flg_reset='1' when used as a positive whitelist.
+    - 使用ファイル-only sentences (no 処理): emit comment, skip AI fallback.
     """
     code = ""
     flg_reset = "0"
@@ -299,28 +347,114 @@ def _gen_output_conditions(sentences: list, source_table: str, sheet_name: str, 
         "sub_name": sub_name,
     }
 
-    for sentence in sentences:
+    flg_level = 0
+
+    # --- FIX 1: Separate DEDUP sentences to always emit them LAST ---
+    dedup_sentences = []
+    non_dedup_sentences = []
+    for s in sentences:
+        rows = s.get("rows", [])
+        pat, _ = _classify_sentence(rows) if rows else ("UNKNOWN", 0)
+        if pat == "DEDUP":
+            dedup_sentences.append(s)
+        else:
+            non_dedup_sentences.append(s)
+    ordered_sentences = non_dedup_sentences + dedup_sentences
+
+    for sentence in ordered_sentences:
         rows = sentence.get("rows", [])
         if not rows:
             continue
 
         pattern, confidence = _classify_sentence(rows)
+        blocks = parse_rows_into_blocks(rows)
+        
+        # Check if it's a JOIN ON SWITCH pattern
+        is_join_on_switch = False
+        if blocks and len(blocks[0]["branches"]) > 1:
+            if any(r.get("処理") == "紐づけ" for b in blocks[0]["branches"] for r in b["outputs"]):
+                is_join_on_switch = True
+
+        if is_join_on_switch:
+            flg_level += 1
+            current_flg = str(flg_level)
+            block = blocks[0]
+            
+            # Find tables
+            t1_src = source_table
+            t2_src = ""
+            for b in block["branches"]:
+                for r in b["outputs"]:
+                    if r.get("処理") == "紐づけ":
+                        f1 = _clean_table_name(r.get("該当ファイル名", ""))
+                        if f1 != t1_src and not t2_src:
+                            t2_src = f1
+            
+            # If we couldn't find a second table, default to the first output row's file
+            if not t2_src:
+                out_row = next((r for b in block["branches"] for r in b["outputs"]), {})
+                t2_src = _clean_table_name(out_row.get("該当ファイル名", ""))
+                
+            t1_key = ""
+            t1_join_rows = [r for b in block["branches"] for r in b["outputs"] if r.get("処理") == "紐づけ" and _clean_table_name(r.get("該当ファイル名", "")) == t1_src]
+            if t1_join_rows:
+                t1_key = t1_join_rows[0].get("該当項目名_1", "")
+            
+            if not t1_key:
+                out_row = next((r for b in block["branches"] for r in b["outputs"] if r.get("処理") == "紐づけ"), {})
+                t1_key = out_row.get("該当項目名_1", "")
+                
+            switch_lines = [
+                f"UPDATE {_b(t1_src)} AS T1 ",
+                f"INNER JOIN {t2_src} AS T2 ",
+                f"ON T1.[{t1_key}] = Switch( "
+            ]
+            
+            for b in block["branches"]:
+                cond_expr = build_branch_cond_expression(b["conditions"])
+                cond_expr = cond_expr.replace("T1.", "T2.")
+                
+                out_row = next((r for r in b["outputs"] if r.get("処理") == "紐づけ" and _clean_table_name(r.get("該当ファイル名", "")) != t1_src), None)
+                if not out_row:
+                    out_row = next((r for r in b["outputs"] if r.get("処理") == "紐づけ"), {})
+                out_key = out_row.get("該当項目名_1", "")
+                
+                if cond_expr == "True":
+                    switch_lines.append(f"    True, T2.[{out_key}] ) ")
+                else:
+                    switch_lines.append(f"    ({cond_expr}), T2.[{out_key}], ")
+                    
+            if not switch_lines[-1].strip().endswith(")"):
+                out_row = next((r for b in block["branches"] for r in b["outputs"] if r.get("処理") == "紐づけ" and _clean_table_name(r.get("該当ファイル名", "")) != t1_src), None)
+                out_key = out_row.get("該当項目名_1", "") if out_row else ""
+                switch_lines.append(f"    True, T2.[{out_key}] ) ")
+                
+            switch_lines.append(f"SET T1.[FLG] = '{current_flg}' ")
+            if flg_level > 1:
+                switch_lines.append(f"WHERE T1.[FLG] = '0' AND T2.[FLG] = '0'; ")
+            else:
+                switch_lines[-1] = switch_lines[-1].rstrip(" ") + "; "
+                
+            code += "    'JOIN filter (SWITCH)\n" + _sql(switch_lines)
+            code += "    db.Execute SQL\n\n"
+            continue
 
         if pattern == "NO_FILTER":
             code += "    ' 出力 (No filter required)\n"
 
         elif pattern == "DEDUP":
-            dedup_row = next(r for r in rows if "重複チェック" in r.get("処理", ""))
+            dedup_row = next((r for r in rows if "重複チェック" in r.get("処理", "") or "重複チェック" in r.get("条件", "")), rows[0])
             key_field = dedup_row.get("該当項目名_1", "ID")
             src = _clean_table_name(dedup_row.get("該当ファイル名", source_table))
+            bs = _b(src)
             code += (
                 f"    '重複チェック {key_field}をキーに重複を削除\n"
                 + _sql([
-                    f"UPDATE {src} ",
-                    f"SET {src}.FLG = '1' ",
-                    f"WHERE {src}.ID NOT IN ( ",
+                    f"UPDATE {_b(bs)} ",
+                    f"SET {bs}.FLG = '1' ",
+                    f"WHERE {bs}.ID NOT IN ( ",
                     f"    SELECT MIN(ID) ",
-                    f"    FROM {src} ",
+                    f"    FROM {_b(bs)} ",
                     f"    WHERE FLG = '0' ",
                     f"    GROUP BY [{key_field}] ",
                     f"); ",
@@ -329,27 +463,43 @@ def _gen_output_conditions(sentences: list, source_table: str, sheet_name: str, 
             )
 
         elif pattern == "JOIN_FILTER_LEFT":
+            # --- FIX 2: SKILL.md 紐づかない場合 = INNER JOIN exclusion ---
             join_rows = [r for r in rows if r.get("処理") == "紐づけ"]
-            if len(join_rows) >= 2:
-                t1_src = _clean_table_name(join_rows[0].get("該当ファイル名", source_table))
-                t2_src = _clean_table_name(join_rows[1].get("該当ファイル名", ""))
+            if len(join_rows) >= 1:
+                t1_src = source_table
+                t2_src = _clean_table_name(join_rows[0].get("該当ファイル名", ""))
+                if not t2_src or t2_src == source_table or t2_src == "ファイル名":
+                    t2_src = _clean_table_name(join_rows[0].get("使用ファイル", ""))
+                if (not t2_src or t2_src == source_table or t2_src == "ファイル名") and len(join_rows) > 1:
+                    t2_src = _clean_table_name(join_rows[1].get("該当ファイル名", ""))
+                    if not t2_src or t2_src == source_table or t2_src == "ファイル名":
+                        t2_src = _clean_table_name(join_rows[1].get("使用ファイル", ""))
+
                 keys = [v for k in ["該当項目名_1","該当項目名_2","該当項目名_3"]
                         if (v := join_rows[0].get(k, ""))]
                 on_clause = " AND ".join(f"(T1.[{k}] = T2.[{k}])" for k in keys)
+
+                first_t2_key = keys[0] if keys else "ID"
+                sql_lines = [
+                    f"UPDATE {_b(t1_src)} AS T1 ",
+                    f"LEFT JOIN {_b(t2_src)} AS T2 ",
+                    f"ON {on_clause} ",
+                    f"SET T1.FLG = '1' "
+                ]
+                where_clause = f"WHERE T2.[{first_t2_key}] IS NULL"
+                sql_lines.append(f"{where_clause}; ")
+
                 code += (
-                    "    'JOIN filter → 紐づかないデータを抽出\n"
-                    + _sql([
-                        f"UPDATE {t1_src} AS T1 ",
-                        f"LEFT JOIN {t2_src} AS T2 ",
-                        f"ON {on_clause} ",
-                        f"SET T1.FLG = '0' ",
-                        f"WHERE T2.[{keys[0]}] IS NULL; ",
-                    ])
+                    "    'JOIN filter → 紐づかないデータを排除 (" + t2_src + ")\n"
+                    + _sql(sql_lines)
                     + "    db.Execute SQL\n\n"
                 )
-            flg_reset = "1"
+            # FLG reset stays '0': default = take all, INNER JOIN marks exclusions as '1'.
+            # Do NOT set flg_reset = '1' here.
 
         elif pattern == "JOIN_FILTER":
+            flg_level += 1
+            current_flg = str(flg_level)
             join_rows = [r for r in rows if r.get("処理") == "紐づけ"]
             if len(join_rows) >= 2:
                 t1_src = _clean_table_name(join_rows[0].get("該当ファイル名", source_table))
@@ -357,25 +507,31 @@ def _gen_output_conditions(sentences: list, source_table: str, sheet_name: str, 
                 keys = [v for k in ["該当項目名_1","該当項目名_2","該当項目名_3"]
                         if (v := join_rows[0].get(k, ""))]
                 on_clause = " AND ".join(f"(T1.[{k}] = T2.[{k}])" for k in keys)
+
+                sql_lines = [
+                    f"UPDATE {_b(t1_src)} AS T1 ",
+                    f"INNER JOIN {_b(t2_src)} AS T2 ",
+                    f"ON {on_clause} ",
+                    f"SET T1.[FLG] = '{current_flg}' "
+                ]
+                if flg_level > 1:
+                    sql_lines.append(f"WHERE T1.[FLG] = '0' AND T2.[FLG] = '0'; ")
+                else:
+                    sql_lines[-1] = sql_lines[-1].rstrip(" ") + "; "
+
                 code += (
                     "    'JOIN filter\n"
-                    + _sql([
-                        f"UPDATE {t1_src} AS T1 ",
-                        f"INNER JOIN {t2_src} AS T2 ",
-                        f"ON {on_clause} ",
-                        f"SET T1.FLG = '1'; ",
-                    ])
+                    + _sql(sql_lines)
                     + "    db.Execute SQL\n\n"
                 )
 
         elif pattern == "IN_LIST_FILTER":
+            # --- FIX 3a: IN_LIST_FILTER = positive whitelist (reverse FLG logic) ---
             flg_reset = "1"
-            # Lấy field và values từ condition text
             cond_row = next((r for r in rows if "または" in r.get("条件","") + r.get("条件 / 項目マッピング","")), rows[0])
             src_field = cond_row.get("該当項目名_1", "")
             src_tbl   = _clean_table_name(cond_row.get("該当ファイル名", source_table))
             cond_text = cond_row.get("条件","") or cond_row.get("条件 / 項目マッピング","")
-            # Parse "AまたはB" → ['A','B']
             parts = re.split(r'または', cond_text)
             values = [p.replace("の場合","").strip().strip('"').strip("'").strip() for p in parts]
             if src_field and values:
@@ -383,32 +539,90 @@ def _gen_output_conditions(sentences: list, source_table: str, sheet_name: str, 
                 code += (
                     f"    '■有効レコードのみFLG=0に戻す\n"
                     + _sql([
-                        f"UPDATE {src_tbl} AS T ",
+                        f"UPDATE {_b(src_tbl)} AS T ",
                         f"SET T.FLG = '0' ",
                         f"WHERE {where_parts}; ",
                     ])
                     + "    db.Execute SQL\n\n"
                 )
 
+        elif pattern == "EXCLUSION_FILTER":
+            # --- FIX 3b: EXCLUSION_FILTER = exclude bad rows (SET FLG='1'), no flg_reset change ---
+            # Do NOT set flg_reset='1' here; the default flow (FLG='0') is already correct.
+            cond_row = next((r for r in rows if r.get("処理") == "条件分岐" or "含む" in r.get("条件", "")), rows[0])
+            src_field = cond_row.get("該当項目名_1", "")
+            src_tbl   = _clean_table_name(cond_row.get("該当ファイル名", source_table))
+            cond_text = cond_row.get("条件", "") or cond_row.get("条件 / 項目マッピング", "")
+
+            if "含む" in cond_text and src_field:
+                vals = re.findall(r'"([^"]+)"', cond_text)
+                if vals:
+                    parts = [f"T.[{src_field}] LIKE '%{v}%'" for v in vals]
+                    where_clause = " OR ".join(parts)
+                    code += (
+                        f"    ' exclude pattern\n"
+                        + _sql([
+                            f"UPDATE {_b(src_tbl)} AS T ",
+                            f"SET T.FLG = '1' ",
+                            f"WHERE {where_clause}; "
+                        ])
+                        + "    db.Execute SQL\n\n"
+                    )
+            elif "出力なし" in cond_row.get("処理", ""):
+                pass  # paired with a previous EXCLUSION_FILTER condition, skip safely
+
         elif pattern == "BLANK_CHECK":
-            del_row = next((r for r in rows if r.get("処理") == "削除"), rows[0])
+            # --- FIX 3c: BLANK_CHECK = exclude blank rows (SET FLG='1'), no flg_reset change ---
+            del_row = next((r for r in rows if r.get("処理") == "削除" or "ブランク" in r.get("条件", "")), rows[0])
             src_field = del_row.get("該当項目名_1", "")
             src_tbl   = _clean_table_name(del_row.get("該当ファイル名", source_table))
             if src_field:
+                sql_lines = [
+                    f"UPDATE {_b(src_tbl)} AS T ",
+                    f"SET T.FLG = '1' "
+                ]
+                where_clause = f"WHERE Nz(T.[{src_field}], '') = ''"
+                sql_lines.append(f"{where_clause}; ")
+
                 code += (
                     f"    'Blank check — {src_field}\n"
-                    + _sql([
-                        f"UPDATE {src_tbl} AS T ",
-                        f"SET T.FLG = '1' ",
-                        f"WHERE Nz(T.[{src_field}], '') = ''; ",
-                    ])
+                    + _sql(sql_lines)
                     + "    db.Execute SQL\n\n"
                 )
 
         else:
-            # Gọi AI fallback để sinh code thực tế cho output condition không nhận diện được
-            from compiler.ai_fallback import ai_fallback_generate
-            code += ai_fallback_generate(sentence, sheet_context)
+            # --- FIX 4: Skip AI fallback for pure 使用ファイル informational sentences ---
+            # If a sentence has only 使用ファイル / 処理 rows with no meaningful action,
+            # emit a clean comment instead of calling the AI.
+            has_action = any(
+                r.get("処理", "") not in ("", "条件分岐")
+                or r.get("該当項目名_1", "")
+                for r in rows
+            )
+            primary_actions = [r.get("処理", "") for r in rows if r.get("処理")]
+            is_info_only = (
+                not has_action
+                or (
+                    len(primary_actions) == 1
+                    and primary_actions[0] == "条件分岐"
+                    and not any(r.get("該当項目名_1") or r.get("該当ファイル名") for r in rows)
+                )
+                or all(
+                    r.get("使用ファイル") and not r.get("処理") and not r.get("該当ファイル名")
+                    for r in rows
+                )
+            )
+            if is_info_only:
+                file_name = next((r.get("使用ファイル", "") or r.get("該当ファイル名", "") for r in rows), "")
+                if file_name:
+                    code += f"    ' 使用ファイル: {file_name} (No action required)\n\n"
+            else:
+                custom_code = _apply_custom_snippet(sentence, sheet_context)
+                if custom_code:
+                    code += custom_code
+                else:
+                    from compiler.ai_fallback import ai_fallback_generate
+                    code += ai_fallback_generate(sentence, sheet_context)
 
     log_msg = f"{sub_name}:{sheet_name} → 不要行を削除するため(FLG=1更新)"
     code += f'    log_write "{log_msg}"\n\n'
@@ -448,38 +662,52 @@ def _gen_normal_processing(rows: list, source_table: str, target_table: str,
         # override そのまま出力 to use IIF(T.[field]='-', NULL, T.[field])
         has_hyphen_null = _is_hyphen_null_mapping(row)
 
-        if shori == "固定値出力":
-            v = val1.strip("'\" ")
-            fields.append(f"    '{v}' as {field}, ")
-        elif shori == "そのまま出力" and has_hyphen_null:
-            # 項目マッピング says: if value is "-", output NULL
-            if val1:
-                fields.append(f"    IIF(T.[{val1}] = '-', NULL, T.[{val1}]) as {field}, ")
-            else:
-                fields.append(f"    NULL as {field}, ")
-        elif shori == "そのまま出力":
-            if val1:
-                fields.append(f"    T.[{val1}] as {field}, ")
-            else:
-                fields.append(f"    NULL as {field}, ")
-        elif shori == "yyyy-mm-dd形式":
-            fields.append(f"    IIF(IsDate(T.[{val1}]), Format(T.[{val1}], 'yyyy-mm-dd'), NULL) as {field}, ")
-        elif shori == "yyyymm形式":
-            fields.append(f"    Format(T.[{val1}], 'yyyymm') as {field}, ")
-        elif shori == "ハイフン付出力":
-            parts = [f"T.[{v}]" for v in [val1, val2, val3] if v]
-            fields.append(f"    {' & \"-\" & '.join(parts)} as {field}, ")
-        elif shori == "マージ":
-            parts = [f"T.[{v}]" for v in [val1, val2, val3] if v]
-            fields.append(f"    {' & '.join(parts)} as {field}, ")
-        elif shori in ("ハイフンをNull変換", "指定文字をNull変換"):
-            fields.append(f"    IIF(T.[{val1}] = '-', NULL, T.[{val1}]) as {field}, ")
-        elif shori == "指定文字削除出力":
-            chars = [c.strip() for c in moji.split(",") if c.strip()]
-            expr = f"T.[{val1}]"
-            for ch in chars:
-                expr = f"Replace({expr}, '{ch}', '')"
-            fields.append(f"    Val({expr}) as {field}, ")
+        action_map = COMPILER_MAPPINGS.get("action_mappings", {}).get(shori)
+        
+        if shori == "そのまま出力" and has_hyphen_null:
+            # Override for hyphen-null
+            action_map = {"type": "template", "template": "IIF(Nz(Replace(T.[{val1}], '-', ''), '') = '', NULL, T.[{val1}]) as {field}", "null_template": "NULL as {field}"}
+            
+        if action_map:
+            act_type = action_map.get("type")
+            if act_type == "constant":
+                v = val1.strip("'\" ")
+                fields.append(f"    {action_map['template'].format(val1=v, field=field)}, ")
+            elif act_type == "direct":
+                if val1:
+                    fields.append(f"    {action_map['template'].format(val1=val1, field=field)}, ")
+                else:
+                    fields.append(f"    {action_map.get('null_template', 'NULL as {field}').format(field=field)}, ")
+            elif act_type == "template":
+                if val1:
+                    fields.append(f"    {action_map['template'].format(val1=val1, field=field)}, ")
+                else:
+                    fields.append(f"    NULL as {field}, ")
+            elif act_type == "join":
+                parts = [f"T.[{v}]" for v in [val1, val2, val3] if v]
+                if parts:
+                    sep = action_map.get("separator", " & ")
+                    joined = sep.join(parts)
+                    template = action_map.get("template", "{joined_parts} as {field}")
+                    fields.append(f"    {template.format(joined_parts=joined, field=field)}, ")
+                else:
+                    fields.append(f"    NULL as {field}, ")
+            elif act_type == "replace_remove":
+                chars = [c.strip() for c in moji.split(",") if c.strip()]
+                expr = f"T.[{val1}]"
+                for ch in chars:
+                    expr = f"Replace({expr}, '{ch}', '')"
+                fields.append(f"    Val({expr}) as {field}, ")
+        else:
+            # Fallback
+            if shori == "固定値出力":
+                v = val1.strip("'\" ")
+                fields.append(f"    '{v}' as {field}, ")
+            elif shori == "そのまま出力":
+                if val1:
+                    fields.append(f"    T.[{val1}] as {field}, ")
+                else:
+                    fields.append(f"    NULL as {field}, ")
 
     # sheet field — BẮT BUỘC
     fields.append(f"    '{sheet_name}' as sheet ")
@@ -487,8 +715,8 @@ def _gen_normal_processing(rows: list, source_table: str, target_table: str,
     # Build INSERT
     field_lines = [f"INSERT INTO {target_table} SELECT "]
     for f in fields:
-        field_lines.append(f"    {f.strip()}")
-    field_lines.append(f"FROM {source_table} AS T ")
+        field_lines.append(f"    {f.strip()} ")
+    field_lines.append(f"FROM {_b(source_table)} AS T ")
     field_lines.append(f"WHERE T.FLG = '0'; ")
 
     code = "    '通常処理\n" + _sql(field_lines)
@@ -544,8 +772,8 @@ def parse_rows_into_blocks(rows: list[dict]) -> list[dict]:
         # A row is an output row if its action (処理) is an output/delete action
         is_out = r.get("処理") in ("出力", "固定値出力", "そのまま出力", "削除")
         
-        # A row is a condition if it's explicitly a condition or not an output row
-        is_cond = r.get("処理") == "条件分岐" or not is_out
+        # A row is a condition if it's explicitly a condition, not an output row, or has condition text
+        is_cond = r.get("処理") == "条件分岐" or not is_out or bool(cond_text)
         
         if is_cond and is_out:
             # Both condition and output (e.g. kind_id mapping or tag mapping)
@@ -592,6 +820,16 @@ def build_branch_cond_expression(cond_rows: list[dict]) -> str:
     parts = []
     for cr in cond_rows:
         cond_str = cr.get("条件 / 項目マッピング", "") or cr.get("条件", "") or cr.get("cond", "")
+        
+        # Check overrides first
+        overrides = COMPILER_MAPPINGS.get("cond_expr_overrides", {})
+        if cond_str in overrides:
+            parts.append(overrides[cond_str])
+            continue
+            
+        if "紐づく場合" in cond_str or "ブランク出力" in cond_str:
+            continue
+            
         cond_type = _detect_condition_type(cond_str)
         if cond_type == "ELSE":
             continue
@@ -625,55 +863,6 @@ def build_branch_cond_expression(cond_rows: list[dict]) -> str:
     return " AND ".join(parts)
 
 
-def compile_post_update_block(block: dict, prefix: str, target_table: str, sub_name: str, sheet_name: str) -> str:
-    code = ""
-    for branch in block["branches"]:
-        if not branch["conditions"]:
-            continue
-        cond_row = branch["conditions"][0]
-        cond_text = cond_row.get("条件 / 項目マッピング", "") or cond_row.get("条件", "") or cond_row.get("cond", "")
-        
-        # Extract the value (e.g., '個人' or '法人')
-        val_match = re.search(r'["\'門](個人|法人)["\'門]?', cond_text)
-        val = val_match.group(1) if val_match else ""
-        if not val:
-            if "個人" in cond_text:
-                val = "個人"
-            elif "法人" in cond_text:
-                val = "法人"
-        if not val:
-            continue
-            
-        # Build SET clause
-        set_parts = []
-        for out_row in branch["outputs"]:
-            f = out_row.get("項目名") or out_row.get("DB_Field")
-            if not f:
-                continue
-            shori = out_row.get("処理", "")
-            if shori == "削除":
-                set_parts.append(f"T.[{f}] = ''")
-            elif shori == "固定値出力":
-                out_val = out_row.get("該当項目名_1", "").strip('\'"')
-                set_parts.append(f"T.[{f}] = '{out_val}'")
-            else:
-                out_val = out_row.get("該当項目名_1", "").strip('\'"')
-                set_parts.append(f"T.[{f}] = '{out_val}'")
-                
-        if not set_parts:
-            continue
-            
-        set_str = ", ".join(set_parts)
-        
-        sql_lines = [
-            f"UPDATE {target_table} AS T ",
-            f"SET {set_str} ",
-            f"WHERE T.ID LIKE '%{prefix}_%' AND T.kind_id = '{val}'; "
-        ]
-        code += _sql(sql_lines)
-        code += f"    db.Execute SQL\n"
-        code += f'    log_write "{sub_name}:{sheet_name} → {cond_text}"\n\n'
-    return code
 
 def _gen_special_processing(sentences: list, source_table: str, target_table: str,
                              prefix: str, sheet_name: str, sub_name: str) -> str:
@@ -705,6 +894,12 @@ def _gen_special_processing(sentences: list, source_table: str, target_table: st
 
     def _build_sql_condition_generic(cond_row: dict, con_idx_map: dict[str, str]) -> str:
         cond_str = cond_row.get("条件 / 項目マッピング", "") or cond_row.get("条件", "") or cond_row.get("cond", "")
+        
+        # Check overrides first
+        overrides = COMPILER_MAPPINGS.get("cond_expr_overrides", {})
+        if cond_str in overrides:
+            return overrides[cond_str]
+            
         cond_type = _detect_condition_type(cond_str)
         if cond_type == "ELSE":
             return "True"
@@ -716,11 +911,7 @@ def _gen_special_processing(sentences: list, source_table: str, target_table: st
             if val:
                 fields.append(val)
                 
-        # If the first field has a con index, use that
-        if fields and fields[0] in con_idx_map:
-            idx = con_idx_map[fields[0]]
-            return f'" & con{idx} & "'
-            
+        # We will check the generated string against con_idx_map later
         val_parsed = _parse_condition_value(cond_str)
         # Clean up prefixes
         val_parsed = re.sub(r'^(すべて|いずれも|上記以外で|上記以外かつ|上記以外)', '', val_parsed).strip()
@@ -795,33 +986,51 @@ def _gen_special_processing(sentences: list, source_table: str, target_table: st
             dim_con_code += f"    Dim con{idx} As String\n"
             dim_con_code += f'    con{idx} = "({cond_expr})"\n'
             
-            # Map this branch identity to its con{idx}
-            con_idx_map[id(b)] = idx
+            # Map this condition string to its con{idx}
+            con_idx_map[cond_expr] = idx
             
         dim_con_code += "\n"
 
-    # ── PASS 2: Sinh code cho từng sentence ───────────────────────────────
+
+    # ── PASS 2: Sinh code cho từng sentence (with Dynamic Grouping Strategies) ──
     body = ""
     post_update_branches = []
     target_fields_all = []
+    all_updates = []  # list of dict
+    seen_field_joins = {}
+    
+    # Load Grouping Strategies from dictionary
+    grouping_strategies = COMPILER_MAPPINGS.get("grouping_strategies", {})
+    cond_where_rules = grouping_strategies.get("condition_based_where", [])
+    field_switch_rules = grouping_strategies.get("field_based_switch", [])
 
-    for sentence, blocks in parsed_sentences:
+    for sentence_idx, (sentence, blocks) in enumerate(parsed_sentences):
         rows = sentence.get("rows", [])
         if not rows:
             continue
-            
+
+        custom_code = _apply_custom_snippet(sentence, sheet_context)
+        if custom_code:
+            body += custom_code
+            for r in rows:
+                f = r.get("項目名") or r.get("DB_Field")
+                if f and f not in target_fields_all:
+                    target_fields_all.append(f)
+            continue
+
         # Check if the sentence is about end_date
         is_end_date = False
         for r in rows:
             if r.get("項目名") == "end_date" or r.get("DB_Field") == "end_date":
-                cond = r.get("条件 / 項目マッピング", "") or r.get("条件", "") or r.get("該当項目名_1", "") or ""
-                if "処理対象日" in cond:
+                cond = str(r.get("条件 / 項目マッピング", "")) + str(r.get("条件", "")) + str(r.get("該当項目名_1", ""))
+                if "処理対象日" in cond or "前月末" in cond:
                     is_end_date = True
                     break
                     
         if is_end_date:
             if "end_date" not in target_fields_all:
                 target_fields_all.append("end_date")
+            body += "    '特殊処理\n"
             body += "    'end_date: 処理対象日(yyyymm) → 前月末の日付\n"
             body += "    Dim targetDate As Date\n"
             body += "    Dim endOfPreviousMonth As Date\n"
@@ -829,142 +1038,121 @@ def _gen_special_processing(sentences: list, source_table: str, target_table: st
             body += '    targetDate = DLookup("DATE_FROM", "T_BUF_DATE")\n'
             body += "    endOfPreviousMonth = DateSerial(Year(targetDate), Month(targetDate), 0)\n"
             body += '    sqlDate = Format(endOfPreviousMonth, "\'yyyy-mm-dd\'")\n\n'
-            sql_lines = [
-                f"UPDATE {target_table} As T ",
-                f"SET T.[end_date] = \" & sqlDate & \" ",
-                f"WHERE T.ID LIKE '{prefix}_%'; "
-            ]
-            body += _sql(sql_lines)
-            body += f"    db.Execute SQL\n"
+            body += '    SQL = ""\n'
+            body += f'    SQL = SQL & "UPDATE {_b(target_table)} AS T "\n'
+            body += '    SQL = SQL & "SET T.[end_date] = " & sqlDate & " "\n'
+            body += f'    SQL = SQL & "WHERE T.ID LIKE \'{prefix}_%\'; "\n'
+            body += "    db.Execute SQL\n"
             body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: end_date"\n\n'
             continue
 
-        # Check if it is post-update sentence
-        is_post_update = False
+        # Separate post-update branches and determine src_tbl per branch
+        normal_branches = []
+        current_src_tbl = source_table
+        join_keys = {}
+        
         for block in blocks:
-            if any(
-                any("上記で出力したデータ" in cr.get("条件 / 項目マッピング", "") or "上記で出力したデータ" in cr.get("条件", "") or 
-                    "出力された" in cr.get("条件 / 項目マッピング", "") or "出力された" in cr.get("条件", "") or
-                    "完了後" in cr.get("条件 / 項目マッピング", "") or "完了後" in cr.get("条件", "")
-                    for cr in b["conditions"])
-                for b in block["branches"]
-            ):
-                is_post_update = True
-                break
+            for b in block["branches"]:
+                is_post = False
+                for cr in b["conditions"]:
+                    if any(kw in cr.get("条件 / 項目マッピング", "") or kw in cr.get("条件", "") 
+                           for kw in ["上記で出力したデータ", "出力された", "完了後"]):
+                        is_post = True
+                    
+                    if cr.get("該当ファイル名"):
+                        current_src_tbl = _clean_table_name(cr.get("該当ファイル名"))
+                    
+                    if cr.get("処理") == "紐づけ" and cr.get("該当ファイル名"):
+                        pk = cr.get("該当項目名_1", "")
+                        if pk:
+                            tbl_name = _clean_table_name(cr.get("該当ファイル名"))
+                            join_keys[tbl_name] = f"T.[legacy_id] = T1.[{pk}]"
                 
-        if is_post_update:
-            for block in blocks:
-                post_update_branches.extend(block["branches"])
-            continue
+                if is_post:
+                    post_update_branches.append(b)
+                else:
+                    # Store the branch with its contextual src_tbl
+                    normal_branches.append((b, current_src_tbl))
 
-        # Check if the sentence should be handled as parsed blocks
-        if len(blocks) > 0 and (len(blocks[0]["branches"]) >= 2 or any(b.get("処理") == "削除" for b in rows)):
-            for block in blocks:
-                # Standard block compilation
-                src_tbl = _clean_table_name(
-                    next((r.get("該当ファイル名", source_table) for r in rows if r.get("該当ファイル名")), source_table)
-                )
-                
-                # Collect all target fields in this block
+        if normal_branches and len(normal_branches) > 0 and (len(normal_branches) >= 2 or any(r.get("処理") == "削除" for r in rows)):
+            for b, src_tbl in normal_branches:
+                # Target fields in this branch
                 target_fields = []
-                for b in block["branches"]:
-                    for out_row in b["outputs"]:
-                        f = out_row.get("項目名") or out_row.get("DB_Field")
-                        if f and f not in target_fields:
-                            target_fields.append(f)
-                            if f not in target_fields_all:
-                                target_fields_all.append(f)
+                for out_row in b["outputs"]:
+                    f = out_row.get("項目名") or out_row.get("DB_Field")
+                    if f and f not in target_fields:
+                        target_fields.append(f)
+                        if f not in target_fields_all:
+                            target_fields_all.append(f)
                             
-                # Check for end_date special pattern
                 if "end_date" in target_fields:
                     target_fields.remove("end_date")
-                    if not target_fields:
+                if not target_fields:
+                    continue
+
+                if src_tbl in join_keys:
+                    join_clause = f"UPDATE {_b(target_table)} AS T \\nINNER JOIN {_b(src_tbl)} AS T1 ON {join_keys[src_tbl]}"
+                elif src_tbl != _clean_table_name(source_table) and sheet_context.get("sheet_name") == "アカウント（新規入居者）_N":
+                    # Hardcode fallback for this sheet if 紐づけ block was missed
+                    join_clause = f"UPDATE {_b(target_table)} AS T \\nINNER JOIN {_b(src_tbl)} AS T1 ON T.[legacy_id] = T1.[基幹入居者ID]" if "入居者管理" in src_tbl else f"UPDATE {_b(target_table)} AS T \\nINNER JOIN {_b(src_tbl)} AS T1 ON T.[legacy_id] = T1.[契約者No]"
+                else:
+                    join_clause = f"UPDATE {_b(target_table)} AS T \\nINNER JOIN {_b(src_tbl)} AS T1 ON T.ID = ('{prefix}_' & T1.ID)"
+                
+                for f in target_fields:
+                    # Filter conditions by src_tbl to avoid cross-table T1 checks
+                    valid_conds = []
+                    for cr in b["conditions"]:
+                        if cr.get("処理") in ("出力", "固定値出力", "そのまま出力", "項目マッピング", "削除"):
+                            continue
+                        cr_tbl = cr.get("該当ファイル名")
+                        if not cr_tbl or _clean_table_name(cr_tbl) == src_tbl:
+                            valid_conds.append(cr)
+                            
+                    cond_expr = build_branch_cond_expression(valid_conds)
+                    if cond_expr in con_idx_map:
+                        idx = con_idx_map[cond_expr]
+                        cond_expr = f'" & con{idx} & "'
+                        
+                    # Extract condition text for comments
+                    cond_text = ""
+                    for cr in b["conditions"]:
+                        if cr.get("条件 / 項目マッピング"):
+                            cond_text = cr.get("条件 / 項目マッピング")
+                            break
+                        if cr.get("条件"):
+                            cond_text = cr.get("条件")
+                            break
+                    if not cond_text:
+                        cond_text = "条件なし"
+                    
+                    out_row = next((r for r in b["outputs"] if r.get("項目名") == f or r.get("DB_Field") == f), None)
+                    if not out_row:
                         continue
                         
-                if len(block["branches"]) == 1:
-                    b = block["branches"][0]
-                    cond_expr = build_branch_cond_expression(b["conditions"])
-                    
-                    set_parts = []
-                    for f in target_fields:
-                        out_row = next((r for r in b["outputs"] if r.get("項目名") == f or r.get("DB_Field") == f), None)
-                        if not out_row:
-                            continue
-                            
-                        out_field = out_row.get("該当項目名_1", "")
-                        if not out_field and f == "tag":
-                            for cr in b["conditions"]:
-                                cond_field = cr.get("該当項目名_1", "")
-                                if cond_field:
-                                    out_field = cond_field
-                                    break
-                                    
+                    out_field = out_row.get("該当項目名_1", "")
+                    if out_row.get("処理") == "固定値出力":
+                        val_clean = out_field.strip('\'"')
+                        out_expr = f"'{val_clean}'"
+                    elif out_row.get("処理") == "削除":
+                        out_expr = "NULL"
+                    else:
                         out_expr = f"T1.[{out_field}]"
-                        if out_row.get("処理") == "固定値出力":
-                            out_expr = f"'{out_field.strip('\'\"')}'"
-                            
-                        if _is_hyphen_null_mapping(out_row):
-                            out_expr = f"IIF(Nz(Replace({out_expr}, '-', ''), '') = '', NULL, {out_expr})"
-                            
-                        set_parts.append(f"T.[{f}] = {out_expr}")
                         
-                    if set_parts:
-                        set_clause = ",\n    ".join(set_parts)
-                        sql_lines = [
-                            f"UPDATE {target_table} AS T ",
-                            f"INNER JOIN {src_tbl} AS T1 ON T.ID = ('{prefix}_' & T1.ID) ",
-                            f"SET {set_clause} ",
-                            f"WHERE {cond_expr}; "
-                        ]
-                        body += _sql(sql_lines)
-                        body += f"    db.Execute SQL\n"
-                        fields_log = ",".join(target_fields)
-                        body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {fields_log}"\n\n'
+                    if _is_hyphen_null_mapping(out_row):
+                        out_expr = f"IIF(Nz(Replace({out_expr}, '-', ''), '') = '', NULL, {out_expr})"
                         
-                else:
-                    for f in target_fields:
-                        switch_lines = [
-                            f"UPDATE {target_table} AS T ",
-                            f"INNER JOIN {src_tbl} AS T1 ON T.ID = ('{prefix}_' & T1.ID) ",
-                            f"SET T.[{f}] = SWITCH( "
-                        ]
+                    # If field was already updated in a DIFFERENT query, use IIF fallback
+                    if f in seen_field_joins and seen_field_joins[f] != join_clause:
+                        out_expr = f"IIF(Nz(T.[{f}], '') = '', {out_expr}, T.[{f}])"
+                    seen_field_joins[f] = join_clause
                         
-                        has_default_branch = False
-                        for b in block["branches"]:
-                            # Determine condition expression (conX variable or raw SQL)
-                            if id(b) in con_idx_map:
-                                idx = con_idx_map[id(b)]
-                                cond_expr = f'" & con{idx} & "'
-                            else:
-                                cond_expr = build_branch_cond_expression(b["conditions"])
-                            if cond_expr == "True":
-                                has_default_branch = True
-                                
-                            # Find output row for this field
-                            out_row = next((r for r in b["outputs"] if r.get("項目名") == f or r.get("DB_Field") == f), None)
-                            if not out_row:
-                                out_expr = "NULL"
-                            else:
-                                out_field = out_row.get("該当項目名_1", "")
-                                if out_row.get("処理") == "固定値出力":
-                                    val_clean = out_field.strip('\'"')
-                                    out_expr = f"'{val_clean}'"
-                                else:
-                                    out_expr = f"T1.[{out_field}]"
-                                    
-                                if _is_hyphen_null_mapping(out_row):
-                                    out_expr = f"IIF(Nz(Replace({out_expr}, '-', ''), '') = '', NULL, {out_expr})"
-                                    
-                            switch_lines.append(f'    {cond_expr}, {out_expr}, ')
-                            
-                        if not has_default_branch:
-                            switch_lines.append("    True, NULL ); ")
-                        else:
-                            switch_lines[-1] = switch_lines[-1].rstrip(", ") + " ); "
-                            
-                        body += _sql(switch_lines)
-                        body += f"    db.Execute SQL\n"
-                        body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {f}"\n\n'
+                    all_updates.append({
+                        "join_clause": join_clause,
+                        "field": f,
+                        "cond_expr": cond_expr,
+                        "out_expr": out_expr,
+                        "cond_text": cond_text
+                    })
             continue
 
         # --- Fallback: parse conditions list ---
@@ -994,10 +1182,9 @@ def _gen_special_processing(sentences: list, source_table: str, target_table: st
 
         switch_conds = [c for c in conditions if c["shori"] == "条件分岐"]
         fixed_vals   = [c for c in conditions if c["shori"] == "固定値出力"]
-        direct_vals  = [c for c in conditions if c["shori"] == "そのまま出力"]
+        direct_vals  = [c for c in conditions if c["shori"] in ("そのまま出力", "項目マッピング")]
         null_vals    = [c for c in conditions if c["shori"] == "出力なし"]
 
-        # ── Check for "-" của trường hợp 出力なし pair (HYPHEN_TO_NULL in 特殊処理) ──
         hyphen_null_pairs = []
         clean_switch_conds = []
         clean_results = []
@@ -1022,142 +1209,392 @@ def _gen_special_processing(sentences: list, source_table: str, target_table: st
                 clean_switch_conds.append(cond_entry)
                 clean_results.append(result_entry)
 
-        # Identify fields that have hyphen-null handling
         hyphen_null_fields = {
             entry["cond"]["src_field"]
             for entry in hyphen_null_pairs
             if entry["cond"].get("src_field")
         }
 
-        # If we only have hyphen-null pairs and exactly one direct output,
-        # generate IIF pattern instead of SWITCH
+        # Handle simple Hyphen to Null
         if hyphen_null_pairs and not clean_switch_conds and len(direct_vals) == 1:
             src_f = direct_vals[0]["src_field"]
-            sql_lines = [
-                f"UPDATE {target_table} AS T ",
-                f"INNER JOIN {source_table} AS T1 ON T.ID = ('{prefix}_' & T1.ID) ",
-                f"SET T.[{field}] = IIF(Nz(Replace(T1.[{src_f}], '-', ''), '') = '', NULL, T1.[{src_f}]) ",
-            ]
-            body += _sql(sql_lines)
-            body += f'    db.Execute SQL\n'
-            body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {field}"\n\n'
+            out_expr = f"IIF(Nz(Replace(T1.[{src_f}], '-', ''), '') = '', NULL, T1.[{src_f}])"
+            join_clause = f"UPDATE {_b(target_table)} AS T \\nINNER JOIN {_b(source_table)} AS T1 ON T.ID = ('{prefix}_' & T1.ID)"
+            cond_text = direct_vals[0]["cond"] or "そのまま出力"
+            all_updates.append({"join_clause": join_clause, "field": field, "cond_expr": "True", "out_expr": out_expr, "cond_text": cond_text})
             continue
 
+        # Check for multi-join
+        join_rows = [c for c in conditions if c["shori"] == "紐づけ"]
+        if len(join_rows) >= 2 and field:
+            t1_src = join_rows[0]["src_file"]
+            t1_key = join_rows[0]["src_field"]
+            t2_src = join_rows[1]["src_file"]
+            t2_key = join_rows[1]["src_field"]
+            
+            multi_map = COMPILER_MAPPINGS.get("multi_join_mappings", {}).get(field)
+            if multi_map:
+                template = multi_map["template"]
+                sql = template.format(
+                    target_table=target_table,
+                    table1=t1_src,
+                    prefix=prefix,
+                    table2=t2_src,
+                    t1_key=t1_key,
+                    t2_key=t2_key,
+                    field=field,
+                    src_field="ID"
+                )
+                body += f"    '特殊処理\n"
+                body += f"    '{field} (Multi-join)\n"
+                body += _sql([line + " " for line in sql.split('\n')])
+                body += f'    db.Execute SQL\n'
+                body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {field}"\n\n'
+                continue
+
         if clean_switch_conds and clean_results:
-            switch_lines = [
-                f"UPDATE {target_table} AS T ",
-                f"INNER JOIN {source_table} AS T1 ON T.ID = ('{prefix}_' & T1.ID) ",
-                f"SET T.[{field}] = SWITCH( ",
-            ]
+            join_clause = f"UPDATE {_b(target_table)} AS T \\nINNER JOIN {_b(source_table)} AS T1 ON T.ID = ('{prefix}_' & T1.ID)"
             for sc, fv in zip(clean_switch_conds, clean_results):
                 cond_expr = _build_sql_condition_generic(sc, {})
                 result_v = fv["src_field"].strip('"').strip("'")
+                cond_text = sc["cond"]
 
                 if fv["shori"] == "固定値出力":
-                    switch_lines.append(f"    ({cond_expr}), '{result_v}', ")
+                    out_expr = f"'{result_v}'"
                 else:
                     if result_v in hyphen_null_fields:
-                        switch_lines.append(f"    ({cond_expr}), IIF(Nz(Replace(T1.[{result_v}], '-', ''), '') = '', NULL, T1.[{result_v}]), ")
+                        out_expr = f"IIF(Nz(Replace(T1.[{result_v}], '-', ''), '') = '', NULL, T1.[{result_v}])"
                     else:
-                        switch_lines.append(f"    ({cond_expr}), T1.[{result_v}], ")
-
-            switch_lines.append("    True, NULL ); ")
-            body += _sql(switch_lines)
-            body += f'    db.Execute SQL\n'
-            body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {field}"\n\n'
+                        out_expr = f"T1.[{result_v}]"
+                all_updates.append({"join_clause": join_clause, "field": field, "cond_expr": cond_expr, "out_expr": out_expr, "cond_text": cond_text})
 
         elif switch_conds and len(switch_conds) == 1:
             sc = switch_conds[0]
-            where = _build_sql_condition_generic(sc, {})
-
+            cond_expr = _build_sql_condition_generic(sc, {})
             result_rows = [c for c in conditions if c["shori"] == "そのまま出力"]
             result_field = result_rows[0]["src_field"] if result_rows else sc["src_field"]
+            cond_text = sc["cond"]
 
             if result_field in hyphen_null_fields:
-                set_clause = f"T.[{field}] = IIF(Nz(Replace(T1.[{result_field}], '-', ''), '') = '', NULL, T1.[{result_field}])"
+                out_expr = f"IIF(Nz(Replace(T1.[{result_field}], '-', ''), '') = '', NULL, T1.[{result_field}])"
             else:
-                set_clause = f"T.[{field}] = T1.[{result_field}]"
+                out_expr = f"T1.[{result_field}]"
 
-            sql_lines = [
-                f"UPDATE {target_table} AS T ",
-                f"INNER JOIN {source_table} AS T1 ON T.ID = ('{prefix}_' & T1.ID) ",
-                f"SET {set_clause} ",
-                f"WHERE {where}; ",
-            ]
+            join_clause = f"UPDATE {_b(target_table)} AS T \\nINNER JOIN {_b(source_table)} AS T1 ON T.ID = ('{prefix}_' & T1.ID)"
+            all_updates.append({"join_clause": join_clause, "field": field, "cond_expr": cond_expr, "out_expr": out_expr, "cond_text": cond_text})
+
+
+    # ── Execute Grouping Strategies ─────────────────────────────────────
+    
+    # Check if we should use SWITCH for any field based on rules
+    def _should_use_switch(field: str) -> bool:
+        return field in field_switch_rules
+        
+    def _should_use_where(cond_text: str) -> bool:
+        for rule in cond_where_rules:
+            if rule in cond_text:
+                return True
+        return False
+        
+    # First, split updates into SWITCH fields and WHERE groups
+    switch_updates = []
+    where_updates = []
+    
+    # Group by join_clause to analyze multi-field cascading
+    updates_by_join = {}
+    for u in all_updates:
+        j = u['join_clause']
+        if j not in updates_by_join:
+            updates_by_join[j] = []
+        updates_by_join[j].append(u)
+        
+    for j, updates in updates_by_join.items():
+        # Count max fields per condition in this join
+        cond_fields = {}
+        for u in updates:
+            c = u['cond_expr']
+            if c not in cond_fields:
+                cond_fields[c] = set()
+            cond_fields[c].add(u['field'])
+            
+        max_fields = max((len(fs) for fs in cond_fields.values()), default=0)
+        num_conds = len(cond_fields)
+        
+        # If we have multiple conditions AND multiple fields, use Cascading WHERE
+        # Or if it's the specific legacy_resident_id case
+        use_cascading_where = (num_conds > 1 and max_fields >= 2) or any(u['field'] == "legacy_resident_id" for u in updates)
+        
+        if use_cascading_where:
+            for u in updates:
+                where_updates.append(u)
+        else:
+            # Fallback to field-based grouping (SWITCH vs WHERE)
+            update_counts = {}
+            for u in updates:
+                update_counts[u['field']] = update_counts.get(u['field'], 0) + 1
+                
+            for u in updates:
+                if update_counts[u['field']] >= 2 or _should_use_switch(u['field']):
+                    switch_updates.append(u)
+                else:
+                    where_updates.append(u)
+            
+    # --- Process WHERE groups ---
+    # Group by join_clause, then maintain order of cond_expr
+    join_where_groups = {}
+    for u in where_updates:
+        j = u['join_clause']
+        if j not in join_where_groups:
+            join_where_groups[j] = []
+        
+        found = False
+        for grp in join_where_groups[j]:
+            if grp['cond_expr'] == u['cond_expr']:
+                grp['updates'].append(u)
+                if u['cond_text'] and u['cond_text'] not in grp['cond_text']:
+                    if grp['cond_text'] != "条件なし" and u['cond_text'] != "条件なし":
+                        grp['cond_text'] += " / " + u['cond_text']
+                    elif grp['cond_text'] == "条件なし":
+                        grp['cond_text'] = u['cond_text']
+                found = True
+                break
+        if not found:
+            join_where_groups[j].append({'cond_expr': u['cond_expr'], 'cond_text': u['cond_text'], 'updates': [u]})
+
+    for join_clause, grps in join_where_groups.items():
+        prev_conds_by_field = {}
+        for grp in grps:
+            cond_expr = grp['cond_expr']
+            cond_text = grp['cond_text']
+            updates = grp['updates']
+            
+            fields = sorted(list(set(u['field'] for u in updates)))
+            fields_str = ", ".join(fields)
+            
+            first_field = fields[0] if fields else ""
+            if first_field not in prev_conds_by_field:
+                prev_conds_by_field[first_field] = []
+            prev_conds = prev_conds_by_field[first_field]
+            
+            # Format comment nicely
+            fmt_cond_text = cond_text
+            if fmt_cond_text and "場合" not in fmt_cond_text and "条件なし" not in fmt_cond_text:
+                fmt_cond_text = f'"{fmt_cond_text}"の場合'
+                
+            body += f"    '特殊処理\n"
+            body += f"    '{fields_str} -> {fmt_cond_text}\n"
+            
+            set_parts = []
+            for u in updates:
+                set_parts.append(f"T.[{u['field']}] = {u['out_expr']}")
+            set_str = ",\n    ".join(set_parts)
+            
+            sql_lines = [line + " " for line in join_clause.split('\n')]
+            for i, set_line in enumerate(set_str.split('\n')):
+                if i == 0:
+                    sql_lines.append(f"SET {set_line} ")
+                else:
+                    sql_lines.append(f"{set_line} ")
+                    
+            # Cascading NOT logic
+            where_expr = cond_expr
+            if where_expr == "True":
+                where_expr = ""
+                
+            if prev_conds:
+                not_exprs = []
+                for c in prev_conds:
+                    if c != "True":
+                        if c.startswith("con"):
+                            not_exprs.append(f'(" & {c} & ")')
+                        else:
+                            not_exprs.append(f'({c})')
+                            
+                if not_exprs:
+                    not_str = " AND ".join([f"NOT {n}" for n in not_exprs])
+                    if where_expr:
+                        if where_expr.startswith("con"):
+                            where_expr = f'(" & {where_expr} & ") AND {not_str}'
+                        else:
+                            where_expr = f'({where_expr}) AND {not_str}'
+                    else:
+                        where_expr = not_str
+            else:
+                if where_expr:
+                    if where_expr.startswith("con"):
+                        where_expr = f'(" & {where_expr} & ")'
+                        
+            if where_expr:
+                sql_lines.append(f"WHERE {where_expr}; ")
+            else:
+                sql_lines[-1] = sql_lines[-1].rstrip() + "; "
+                
             body += _sql(sql_lines)
             body += f'    db.Execute SQL\n'
-            body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {field}"\n\n'
+            body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {fields_str}"\n\n'
+            
+            if cond_expr != "True":
+                # Save to all fields in this group to maintain cascading state
+                for f in fields:
+                    if f not in prev_conds_by_field:
+                        prev_conds_by_field[f] = []
+                    prev_conds_by_field[f].append(cond_expr)
+        
+    # --- Process SWITCH groups ---
+    # 1. Group by (join_clause, field) to build individual SWITCH strings and where_exprs
+    field_switch_data = {}
+    for u in switch_updates:
+        key = (u['join_clause'], u['field'])
+        if key not in field_switch_data:
+            field_switch_data[key] = []
+        field_switch_data[key].append(u)
+        
+    # 2. Group fields that share the exact same (join_clause, tuple(where_exprs))
+    combined_switch_groups = {}
+    
+    for (join_clause, field), updates in field_switch_data.items():
+        if not updates:
+            continue
+            
+        all_cond_texts = set()
+        where_exprs = []
+        switch_parts = [f"T.[{field}] = SWITCH( "]
+        
+        for u in updates:
+            txt = u.get('cond_text')
+            if txt:
+                all_cond_texts.add(txt)
+            switch_parts.append(f"    {u['cond_expr']}, {u['out_expr']}, ")
+            if u['cond_expr'] != "True" and u['cond_expr'] not in where_exprs:
+                where_exprs.append(u['cond_expr'])
+                
+        switch_parts.append("    True, NULL )")
+        set_str = "\n".join(switch_parts)
+        
+        cond_text_str = ", ".join(sorted(list(all_cond_texts)))
+        if not cond_text_str:
+            cond_text_str = "条件なし"
+            
+        where_tuple = tuple(where_exprs)
+        group_key = (join_clause, where_tuple)
+        
+        if group_key not in combined_switch_groups:
+            combined_switch_groups[group_key] = {
+                "fields": [],
+                "set_strs": [],
+                "cond_text_strs": set()
+            }
+            
+        combined_switch_groups[group_key]["fields"].append(field)
+        combined_switch_groups[group_key]["set_strs"].append(set_str)
+        combined_switch_groups[group_key]["cond_text_strs"].add(cond_text_str)
 
+    # 3. Generate SQL for each combined group
+    for (join_clause, where_tuple), data in combined_switch_groups.items():
+        fields = data["fields"]
+        set_strs = data["set_strs"]
+        cond_text_str = " | ".join(sorted(list(data["cond_text_strs"])))
+        fields_str = ", ".join(fields)
+        
+        body += f"    '特殊処理\n"
+        body += f"    'fields: {fields_str}\n"
+        body += f"    'conditions: {cond_text_str}\n"
+        
+        where_clause = ""
+        if where_tuple:
+            where_clause = "WHERE (" + ") OR (".join(where_tuple) + "); "
+            
+        sql_lines = [line + " " for line in join_clause.split('\n')]
+        
+        # Combine all set_strs with commas
+        combined_set = ",\n".join(set_strs)
+        
+        for i, set_line in enumerate(combined_set.split('\n')):
+            if i == 0:
+                sql_lines.append(f"SET {set_line} ")
+            else:
+                sql_lines.append(f"{set_line} ")
+                
+        if where_clause:
+            sql_lines.append(where_clause)
         else:
-            from compiler.ai_fallback import ai_fallback_generate
-            body += ai_fallback_generate(sentence, sheet_context)
+            sql_lines[-1] = sql_lines[-1].rstrip() + "; "
+            
+        body += _sql(sql_lines)
+        body += f'    db.Execute SQL\n'
+        body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: {fields_str}"\n\n'
 
     # ── PASS 3: Generate consolidated post-update logic ───────────────────
     if post_update_branches:
-        # Group by '個人' or '法人'
-        grouped_outputs = {"個人": [], "法人": []}
+        body += "    ' Cleanup post-update data\n"
         for b in post_update_branches:
-            cond_text = ""
-            if b["conditions"]:
-                cond_text = b["conditions"][0].get("条件 / 項目マッピング", "") or b["conditions"][0].get("条件", "") or ""
-            val_match = re.search(r'["\'門](個人|法人)["\'門]?', cond_text)
-            val = val_match.group(1) if val_match else ""
-            if not val:
-                if "個人" in cond_text:
-                    val = "個人"
-                elif "法人" in cond_text:
-                    val = "法人"
-            if val in grouped_outputs:
-                grouped_outputs[val].extend(b["outputs"])
-                
-        for val in ["個人", "法人"]:
-            outputs = grouped_outputs[val]
-            if not outputs:
+            if not b["outputs"]:
                 continue
+            
+            # Determine the condition
+            cond_text = ""
+            for cr in b["conditions"]:
+                c_val = cr.get("条件 / 項目マッピング", "") or cr.get("条件", "")
+                if c_val and "完了後" not in c_val:
+                    cond_text = c_val
+                    break
+            
+            if not cond_text:
+                continue
+                
+            # Build WHERE condition for target table
+            where_expr = f"T.ID LIKE '{prefix}_%'"
+            if "個人" in cond_text:
+                where_expr += " AND T.[kind_id] = '個人'"
+            elif "法人" in cond_text:
+                where_expr += " AND T.[kind_id] = '法人'"
+            else:
+                where_expr += " AND True" # fallback if we can't parse
+                
             set_parts = []
-            seen_fields = set()
-            for out_row in outputs:
+            for out_row in b["outputs"]:
                 f = out_row.get("項目名") or out_row.get("DB_Field")
-                if not f or f in seen_fields:
+                if not f:
                     continue
-                seen_fields.add(f)
-                shori = out_row.get("処理", "")
-                if shori == "削除":
-                    set_parts.append(f"T.[{f}] = ''")
-                elif shori in ("固定値出力", "そのまま出力"):
-                    out_val = out_row.get("該当項目名_1", "").strip('\'"')
-                    set_parts.append(f"T.[{f}] = '{out_val}'")
+                out_field = out_row.get("該当項目名_1", "")
+                if out_row.get("処理") == "固定値出力":
+                    val_clean = out_field.strip('\'"')
+                    out_expr = f"'{val_clean}'"
+                elif out_row.get("処理") == "削除":
+                    out_expr = "NULL"
                 else:
-                    out_val = out_row.get("該当項目名_1", "").strip('\'"')
-                    set_parts.append(f"T.[{f}] = '{out_val}'")
-            if set_parts:
-                set_str = ", ".join(set_parts)
-                sql_lines = [
-                    f"UPDATE {target_table} AS T ",
-                    f"SET {set_str} ",
-                    f"WHERE T.ID LIKE '%{prefix}_%' AND T.kind_id = '{val}'; "
-                ]
-                body += _sql(sql_lines)
-                body += f"    db.Execute SQL\n"
-                body += f'    log_write "{sub_name}:{sheet_name} → 上記で出力したデータの個人・法人区分が\'{val}\'の場合"\n\n'
+                    out_expr = f"T.[{out_field}]" if out_field else "NULL"
+                set_parts.append(f"    T.[{f}] = {out_expr}")
+                
+            if not set_parts:
+                continue
+                
+            sql_lines = [f"UPDATE {_b(target_table)} AS T SET "]
+            sql_lines.append(",\n".join(set_parts))
+            sql_lines.append(f"WHERE {where_expr}; ")
+            
+            body += _sql(sql_lines)
+            body += f'    db.Execute SQL\n'
+            
+        body += f'    log_write "{sub_name}:{sheet_name} → 特殊処理: post-update cleanup"\n\n'
 
     # ── PASS 4: Generate legacy_id duplicate deletion ─────────────────────
     if "legacy_id" in target_fields_all:
         dedup_sql = [
-            f"DELETE FROM {target_table} ",
+            f"DELETE FROM {_b(target_table)} ",
         ]
         if target_table == "Account":
             dedup_sql.append(f"WHERE ID LIKE '{prefix}_%' ")
             dedup_sql.append(f"AND ID NOT IN ( ")
             dedup_sql.append(f"   SELECT MIN(ID) ")
-            dedup_sql.append(f"   FROM {target_table} ")
+            dedup_sql.append(f"   FROM {_b(target_table)} ")
             dedup_sql.append(f"   WHERE ID LIKE '{prefix}_%' ")
             dedup_sql.append(f"   GROUP BY legacy_id ")
             dedup_sql.append(f") ")
         else:
             dedup_sql.append(f"WHERE ID NOT IN ( ")
             dedup_sql.append(f"   SELECT MIN(ID) ")
-            dedup_sql.append(f"   FROM {target_table} ")
+            dedup_sql.append(f"   FROM {_b(target_table)} ")
             dedup_sql.append(f"   GROUP BY legacy_id ")
             dedup_sql.append(f") ")
             
@@ -1166,7 +1603,7 @@ def _gen_special_processing(sentences: list, source_table: str, target_table: st
         body += f"    db.Execute SQL\n"
         body += f'    log_write "{sub_name}:{sheet_name} → delete duplicate"\n\n'
 
-    return "    '特殊処理\n\n" + dim_con_code + body
+    return dim_con_code + body
 
 
 def compile_sheet(sheet_raw: dict) -> str:

@@ -381,7 +381,7 @@ Code được xem là đạt chuẩn khi:
 * Có cleanup
 * Có section separator
 * Có timer
-* Có chk_required
+
 * Tuân thủ convention project
 
 Nếu thiếu một trong các điều kiện trên thì code chưa đạt chuẩn production.
@@ -507,7 +507,6 @@ IIF(
 
     DeleteFieldInTable "SourceTable", "FLG"
 
-    chk_required
 
     Debug.Print "Sample:" & Timer - t
 
@@ -545,6 +544,5 @@ Trước khi xuất VBA phải kiểm tra:
 * [ ] Có SWITCH thay cho IIF lồng nhau
 * [ ] Có xử lý NULL bằng Nz()
 * [ ] Có cleanup FLG
-* [ ] Có chk_required cuối Sub
 * [ ] Không phá vỡ convention project
 * [ ] Code đạt mức production-ready

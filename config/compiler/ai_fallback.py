@@ -76,6 +76,8 @@ def ai_fallback_generate(
             key = json.dumps(sentence_json.get("rows", []), sort_keys=True)
             if key in cache:
                 cached_vba = cache[key]
+                # SKILL.md Checklist #4: strip 「GMO用」 and 'GMO ' from all table names
+                cached_vba = cached_vba.replace("「GMO用」", "").replace("【GMO用】", "").replace("GMO ", "")
                 return (
                     "    ' --- AI GENERATED (sk-architect) ---\n"
                     + "\n".join("    " + l for l in cached_vba.splitlines())
@@ -97,7 +99,7 @@ def ai_fallback_generate(
         if not api_key:
             return _stub(sentence_json, "GOOGLE_API_KEY chưa set")
 
-        env_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
+        env_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         if env_model:
             model = env_model.strip().lower().replace(" ", "-")
 
@@ -114,6 +116,9 @@ def ai_fallback_generate(
                 l for l in lines
                 if not l.startswith("```")
             ).strip()
+
+        # SKILL.md Checklist #4: strip 「GMO用」 and 'GMO ' from all table names
+        vba_raw = vba_raw.replace("「GMO用」", "").replace("【GMO用】", "").replace("GMO ", "")
 
         return (
             "    ' --- AI GENERATED (sk-architect) ---\n"

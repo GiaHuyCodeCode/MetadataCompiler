@@ -2,9 +2,10 @@
 main.py — MetadataCompiler V1  CLI Entry Point
 =================================================
 Usage:
-    python main.py scan    --test2          # Scan xlsx → sheet_raw.json
-    python main.py compile --test2          # Compile sheet_raw.json → .bas
-    python main.py run     --test2          # scan + compile (all-in-one)
+    python3 main.py scan    --test2          # Scan xlsx → sheet_raw.json
+    python3 main.py compile --test2          # Compile sheet_raw.json → .bas
+    python3 main.py run     --test2          # scan + compile (all-in-one)
+    python3 main.py learn   --test1          # Học snippet tự động từ file .bas
 
 Options:
     --folder <name>   hoặc  --<name>   ví dụ: --test2
@@ -192,6 +193,14 @@ def cmd_compile(folder_name: str, json_paths: list[str] = None, only_file: str =
             errors.append(json_path)
 
     _banner(f"COMPILE DONE — {len(written)} file .bas  |  {len(errors)} lỗi")
+    
+    if written:
+        print("\n💡 [NEXT STEP] Copy đoạn prompt dưới đây để giao việc cho AI Agent review/sửa code:")
+        print("─" * 60)
+        print(f"Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `output/{folder_name}` so với spec `sheet_raw.json`. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và `agents/sk-architect/SKILL.md`. Bắt buộc vẫn phải tự rà soát Checklist (Bước 4.3) trước khi hoàn tất mỗi file.")
+        print("─" * 60)
+        print("")
+        
     return written
 
 
@@ -217,7 +226,7 @@ def main():
         
         # Hỗ trợ cả trường hợp người dùng gõ dư dấu '--' (ví dụ: --scan, --compile)
         cmd_stripped = lower_arg.lstrip("-")
-        if cmd_stripped in ("scan", "compile", "run", "all"):
+        if cmd_stripped in ("scan", "compile", "run", "all", "learn"):
             command = cmd_stripped
         elif arg == "--file":
             if i + 1 < len(raw_args):
@@ -238,6 +247,11 @@ def main():
         cmd_scan(folder, only_file)
     elif command == "compile":
         cmd_compile(folder, None, only_file, use_agent)
+    elif command == "learn":
+        from config.compiler.learner import run_learner
+        # Chạy learn trên thư mục output
+        test_dir = os.path.join(PROJECT_ROOT, "output", folder)
+        run_learner(test_dir)
     elif command in ("run", "all"):
         if only_file and not only_file.lower().endswith(".xlsx"):
             # Nếu truyền --file là tên sheet (vd: 契約_K)
@@ -249,7 +263,7 @@ def main():
             cmd_compile(folder, json_paths, "", use_agent)
     else:
         print(f"❌  Lệnh không hợp lệ: {command}")
-        print("    Dùng: scan | compile | run")
+        print("    Dùng: scan | compile | run | learn")
         sys.exit(1)
 
 

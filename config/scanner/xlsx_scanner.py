@@ -281,8 +281,18 @@ def _group_output_condition(raw_rows: list) -> list:
             i = j
 
         else:
-            # R3 — standalone sentence
-            sentences.append({"type": "single", "rows": [row]})
+            # R3 / R4 — Check if it's a standalone sentence or just a context header
+            shori_val = row.get(shori_key, "")
+            joken_val = row.get("条件", "")
+            mokuteki_val = row.get("目的", "")
+            gaitou_val = row.get("該当項目名_1", "")
+
+            if not (shori_val or joken_val or mokuteki_val or gaitou_val):
+                # R4 — Dòng tiêu đề phụ mang tính ngữ cảnh (context)
+                sentences.append({"type": "header", "rows": [row]})
+            else:
+                # R3 — Standalone sentence
+                sentences.append({"type": "single", "rows": [row]})
             i += 1
 
     return sentences
