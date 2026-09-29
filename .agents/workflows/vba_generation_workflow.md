@@ -13,7 +13,7 @@
 
 ## BƯỚC 2 — KIỂM TRA SKILL & QUY TẮC
 
-1. Đọc kỹ các file skill: `agents/sk-architect/SKILL.md`, `agents/rules/vba-rule.md`, `agents/sk-standard/SKILL.md`.
+1. Đọc kỹ các file skill: `.agents/skills/vba-access-architect/SKILL.md`, `.agents/rules/vba-rule.md`, `.agents/skills/vba-development-standard/SKILL.md`.
 2. Đọc file `sample/dictionary_proccess.json` để lấy các SQL pattern mẫu.
 
 ## BƯỚC 3 — GIAO VIỆC CHO AGENT
@@ -21,10 +21,10 @@
 Gửi câu lệnh prompt chuẩn cho Agent (bắt đầu tiến trình sinh code hoặc review):
 
 **Cho 1 file (Cần Approval):**
-> "Hãy generate/review code VBA cho sheet `[Tên Sheet]` ở thư mục `[Tên thư mục test]`. Yêu cầu tuân thủ nghiêm ngặt các quy tắc trong `agents/sk-architect/SKILL.md`, đặc biệt là các quy tắc về tối ưu Production. Bắt buộc phải lập Implementation Plan chờ duyệt, và sau khi được duyệt, phải in ra Checklist & Chứng minh đầy đủ trước khi xuất khối code VBA chất lượng ra bên ngoài."
+> "Hãy generate/review code VBA cho sheet `[Tên Sheet]` ở thư mục `[Tên thư mục test]`. Yêu cầu tuân thủ nghiêm ngặt các quy tắc trong `.agents/skills/vba-access-architect/SKILL.md`, đặc biệt là các quy tắc về tối ưu Production. Bắt buộc phải lập Implementation Plan chờ duyệt, và sau khi được duyệt, phải in ra Checklist & Chứng minh đầy đủ trước khi xuất khối code VBA chất lượng ra bên ngoài."
 
 **Cho thực thi HÀNG LOẠT (Bỏ qua Approval):**
-> "Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `[Tên thư mục test]` so với spec `sheet_raw.json`. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và `agents/sk-architect/SKILL.md`. Bắt buộc vẫn phải tự rà soát Checklist (Bước 4.3) trước khi hoàn tất mỗi file."
+> "Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `[Tên thư mục test]` so với spec `sheet_raw.json`. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và `.agents/skills/vba-access-architect/SKILL.md`. Bắt buộc vẫn phải tự rà soát Checklist (Bước 4.3) trước khi hoàn tất mỗi file."
 
 > **⚠️ CẢNH BÁO CRITICAL:**
 > **KHÔNG BAO GIỜ** được chạy lại lệnh `python3 main.py --compile` hoặc `run` bằng terminal SAU KHI bạn đã thực hiện Bước 3 (nhờ AI Agent review/sửa code). 
@@ -36,9 +36,9 @@ Gửi câu lệnh prompt chuẩn cho Agent (bắt đầu tiến trình sinh code
 
 | File | Vai trò |
 |------|---------|
-| `agents/rules/vba-rule.md` | Rule nền tảng, SQL style, coding convention |
-| `agents/sk-architect/SKILL.md` | Pattern chi tiết cho từng `ast_type`, FLG workflow, SWITCH, Dim con |
-| `agents/sk-standard/SKILL.md` | Quality gate, tiêu chuẩn naming, logging, cleanup checklist |
+| `.agents/rules/vba-rule.md` | Rule nền tảng, SQL style, coding convention |
+| `.agents/skills/vba-access-architect/SKILL.md` | Pattern chi tiết cho từng `ast_type`, FLG workflow, SWITCH, Dim con |
+| `.agents/skills/vba-development-standard/SKILL.md` | Quality gate, tiêu chuẩn naming, logging, cleanup checklist |
 
 ### 4.2 Quy trình sinh code VBA — Step by step
 
@@ -301,7 +301,7 @@ Xuất file `review_report.md` với đánh giá chi tiết theo từng hạng m
 ## BƯỚC 6 — CHỈNH SỬA CODE SAU REVIEW (AUTO-FIX)
 
 ### 6.1 Mục tiêu
-Sử dụng Agent để rà soát code VBA (do pipeline sinh ra) với Spec JSON, sau đó tự động sửa các điểm chưa chính xác nhằm đảm bảo code khớp 100% với nghiệp vụ và `agents/sk-architect/SKILL.md`.
+Sử dụng Agent để rà soát code VBA (do pipeline sinh ra) với Spec JSON, sau đó tự động sửa các điểm chưa chính xác nhằm đảm bảo code khớp 100% với nghiệp vụ và `.agents/skills/vba-access-architect/SKILL.md`.
 
 ### 6.2 Quy trình thực hiện
 1. **Đọc Spec và Code:** Agent đọc file `sheet_raw.json` và file `.bas` hiện tại của sheet.

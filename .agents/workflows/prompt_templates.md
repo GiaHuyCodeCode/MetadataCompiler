@@ -10,7 +10,7 @@ Tài liệu này chứa các câu lệnh (prompts) chuẩn đã được tối �
 
 **Copy câu lệnh sau:**
 ```text
-Hãy generate/review code VBA cho sheet `[Tên Sheet]` ở thư mục `[Tên thư mục test]`. Yêu cầu tuân thủ nghiêm ngặt các quy tắc trong agents/sk-architect/SKILL.md, đặc biệt là các quy tắc về tối ưu Production. Bắt buộc phải lập Implementation Plan chờ duyệt, và sau khi được duyệt, phải in ra Checklist & Chứng minh đầy đủ trước khi xuất khối code VBA chất lượng ra bên ngoài.
+Hãy generate/review code VBA cho sheet `[Tên Sheet]` ở thư mục `[Tên thư mục test]`. Yêu cầu tuân thủ nghiêm ngặt các quy tắc trong .agents/skills/vba-access-architect/SKILL.md, đặc biệt là các quy tắc về tối ưu Production. Bắt buộc phải lập Implementation Plan chờ duyệt, và sau khi được duyệt, phải in ra Checklist & Chứng minh đầy đủ trước khi xuất khối code VBA chất lượng ra bên ngoài.
 ```
 
 **Ví dụ cách điền:**
@@ -24,7 +24,7 @@ Hãy generate/review code VBA cho sheet `[Tên Sheet]` ở thư mục `[Tên th�
 
 **Copy câu lệnh sau:**
 ```text
-Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `[Tên thư mục test]` so với spec sheet_raw.json. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và agents/sk-architect/SKILL.md. Bắt buộc vẫn phải tự rà soát Checklist (Bước 5.4) trước khi hoàn tất mỗi file.
+Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `[Tên thư mục test]` so với spec sheet_raw.json. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và .agents/skills/vba-access-architect/SKILL.md. Bắt buộc vẫn phải tự rà soát Checklist (Bước 5.4) trước khi hoàn tất mỗi file.
 ```
 
 **Ví dụ cách điền:**
@@ -62,7 +62,7 @@ Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư
 
 ### 💡 Lưu ý quan trọng:
 Hai câu lệnh giao việc cho Agent (Phần 1 & 2) đã được tích hợp sẵn các chỉ thị cốt lõi của hệ thống:
-1. Ép Agent phải tuân thủ chuẩn kiến trúc sản phẩm tại `agents/sk-architect/SKILL.md`.
+1. Ép Agent phải tuân thủ chuẩn kiến trúc sản phẩm tại `.agents/skills/vba-access-architect/SKILL.md`.
 2. Yêu cầu Agent bắt buộc phải chạy qua bước kiểm tra chất lượng (Checklist 5.4) để ngăn ngừa lỗi logic trước khi lưu file `*.bas`.
 
 > **⚠️ CẢNH BÁO CRITICAL (SAU KHI NHỜ AI REVIEW/SỬA CODE):**

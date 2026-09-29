@@ -32,7 +32,7 @@ Metadata Compiler V1 thay thế toàn bộ quy trình thủ công bằng một p
 |------|----------|---------|
 | 🔵 **Tầng 1** | `vba_compiler.py` | Đọc dữ liệu spec, sinh code tự động cho các pattern đã biết |
 | 🟣 **Tầng 2** | Gemini 2.5 Flash | Xử lý các trường hợp chưa có pattern, sinh SQL thông minh |
-| 🟡 **Tầng 3** | Antigravity Agent | Rà soát toàn bộ output so với agents/sk-architect/SKILL.md và spec gốc |
+| 🟡 **Tầng 3** | Antigravity Agent | Rà soát toàn bộ output so với .agents/skills/vba-access-architect/SKILL.md và spec gốc |
 
 ---
 
@@ -81,7 +81,7 @@ Compiler chỉ xử lý được những pattern **đã được định nghĩa 
 Gemini không chỉ nhận câu hỏi đơn thuần. Hệ thống truyền vào:
 - **Ngữ cảnh nghiệp vụ** của sheet đang xử lý
 - **Đoạn JSON spec** của câu nghiệp vụ cần sinh code
-- **Các ràng buộc kiến trúc** từ `agents/sk-architect/SKILL.md` để AI tạo ra code đúng chuẩn ngay từ đầu
+- **Các ràng buộc kiến trúc** từ `.agents/skills/vba-access-architect/SKILL.md` để AI tạo ra code đúng chuẩn ngay từ đầu
 
 ### Gemini trả về gì?
 
@@ -101,7 +101,7 @@ flowchart TD
 
     subgraph B[🤖 Antigravity Agent Review]
         direction LR
-        B1[📋 Đọc spec\nsheet_raw.json] --> B2[📏 So sánh\nvới agents/sk-architect/SKILL.md]
+        B1[📋 Đọc spec\nsheet_raw.json] --> B2[📏 So sánh\nvới .agents/skills/vba-access-architect/SKILL.md]
         B2 --> B3[🔍 Rà soát\nChecklist 5.4]
     end
 
@@ -150,7 +150,7 @@ sequenceDiagram
         alt Pattern đã biết
             CP->>OUT: Sinh code trực tiếp
         else Pattern mới/phức tạp
-            CP->>AI: Gửi context + ràng buộc agents/sk-architect/SKILL.md
+            CP->>AI: Gửi context + ràng buộc .agents/skills/vba-access-architect/SKILL.md
             AI->>OUT: Sinh SQL + inject vào file
         end
     end

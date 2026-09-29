@@ -57,7 +57,11 @@ MetadataCompiler_V1/
 │   └── compiler/
 │       └── vba_compiler.py ← Script chạy COMPILE
 │
-├── agents/                 ← Định nghĩa AI Agent (SKILL.md, workflow...)
+├── .agents/                ← Workspace Customizations (skills, rules, workflows, AGENTS.md)
+│   ├── skills/             ← Thư viện kỹ năng (vba-access-architect, senior-ba-metadata-compiler...)
+│   ├── rules/              ← Quy tắc hệ thống (vba-rule.md)
+│   └── workflows/          ← Tài liệu quy trình làm việc
+├── agents                  ← Symlink tương thích ngược trỏ đến .agents
 ├── sample/                 ← Từ điển ngữ nghĩa (semantic_dictionary.json)
 └── HUONG_DAN.md            ← File này
 ```
@@ -97,7 +101,7 @@ Kiểm tra bạn đang ở đúng chỗ:
 
 ```bash
 ls
-# Nên thấy: config/  input/  output/  agents/  sample/  HUONG_DAN.md
+# Nên thấy: .agents/  config/  input/  output/  agents  sample/  HUONG_DAN.md
 ```
 
 ---
@@ -297,8 +301,9 @@ done
 | `config/scanner/scan.py` | Script SCAN chính |
 | `config/compiler/vba_compiler.py` | Script COMPILE chính |
 | `config/compiler/agent_compiler.py` | Agent AI (dùng Gemini) |
-| `agents/workflow/vba_generation_workflow.md` | Workflow sinh VBA cho AI |
-| `agents/rules/vba-rule.md` | Quy tắc viết VBA |
+| `.agents/workflows/vba_generation_workflow.md` | Workflow sinh VBA cho AI |
+| `.agents/rules/vba-rule.md` | Quy tắc viết VBA |
+| `.agents/skills/vba-access-architect/SKILL.md` | Kiến trúc Access VBA chi tiết |
 | `sample/semantic_dictionary.json` | Từ điển ngữ nghĩa dùng khi compile |
 | `verify_report.md` | Báo cáo kiểm tra kết quả scan |
 

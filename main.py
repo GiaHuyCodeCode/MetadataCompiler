@@ -197,7 +197,7 @@ def cmd_compile(folder_name: str, json_paths: list[str] = None, only_file: str =
     if written:
         print("\n💡 [NEXT STEP] Copy đoạn prompt dưới đây để giao việc cho AI Agent review/sửa code:")
         print("─" * 60)
-        print(f"Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `output/{folder_name}` so với spec `sheet_raw.json`. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và `agents/sk-architect/SKILL.md`. Bắt buộc vẫn phải tự rà soát Checklist (Bước 4.3) trước khi hoàn tất mỗi file.")
+        print(f"Hãy rà soát và chỉnh sửa code VBA hàng loạt cho các sheet trong thư mục `output/{folder_name}` so với spec `sheet_raw.json`. Yêu cầu: BỎ QUA việc lập Implementation Plan và chờ Approve. Agent hãy tự động phân tích, sửa code thẳng vào các file `.bas` nếu có sai lệch so với spec và `.agents/skills/vba-access-architect/SKILL.md`. Bắt buộc vẫn phải tự rà soát Checklist (Bước 4.3) trước khi hoàn tất mỗi file.")
         print("─" * 60)
         print("")
         

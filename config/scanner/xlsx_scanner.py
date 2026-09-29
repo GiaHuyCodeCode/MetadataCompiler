@@ -107,6 +107,29 @@ def _is_grey(cell) -> bool:
     return False
 
 
+def _get_cell_fill_argb(cell) -> str | None:
+    """Return ARGB hex string of cell fill if colored, None if default/white/black."""
+    try:
+        fill = cell.fill
+        if not fill or fill.fill_type in (None, "none"):
+            return None
+        fg = fill.fgColor
+        if not fg:
+            return None
+        if fg.type == "rgb":
+            argb = fg.rgb.upper() if fg.rgb else None
+            # Exclude transparent, white, and black header
+            if argb in ("00000000", "FFFFFFFF", "00FFFFFF", "FF000000"):
+                return None
+            return argb
+        if fg.type == "theme":
+            return f"theme_{fg.theme}_{fg.tint}"
+    except Exception:
+        pass
+    return None
+
+
+
 # ─────────────────────────────────────────────────────────
 # Keyword discovery — scan any column 1-5
 # ─────────────────────────────────────────────────────────
@@ -164,7 +187,7 @@ def _parse_filename_section(ws, kw_row: int, kw_col: int, stop_row: int) -> list
     return results
 
 
-def _parse_output_condition_section(ws, kw_row: int, stop_row: int) -> dict:
+def _parse_output_condition_section(ws, kw_row: int, kw_col: int, stop_row: int) -> dict:
     """
     出力条件:
       - keyword row に keyword がある (col E)
@@ -174,8 +197,8 @@ def _parse_output_condition_section(ws, kw_row: int, stop_row: int) -> dict:
     """
     header_row = kw_row + 1
     col_headers: dict[int, str] = {}
-    # Scan from col B(2) to col N(14) for headers
-    for col in range(COL_B, COL_N + 1):
+    # Scan from kw_col to col N(14) for headers (chỉ lấy từ cột chứa 出力条件 trở sang phải)
+    for col in range(kw_col, COL_N + 1):
         h = _cv(ws, header_row, col)
         if h:
             col_headers[col] = h
@@ -391,6 +414,143 @@ def _parse_normal_processing_section(ws, kw_row: int, stop_row: int) -> dict:
     }
 
 
+def _is_special_output_row(r: dict) -> bool:
+    """Return True if row in 特殊処理 is an output/assignment row targeting a field."""
+    fld = r.get("項目名", "")
+    shori = r.get("処理", "")
+    if fld and shori not in ("紐づけ", "条件分岐"):
+        return True
+    if shori in ("出力", "固定値出力", "そのまま出力", "指定文字削除出力", "削除"):
+        return True
+    return False
+
+
+def _is_special_prep_row(r: dict) -> bool:
+    """Return True if row is a data preparation step (e.g. creating buffer column)."""
+    shori = r.get("処理", "")
+    cond = r.get("条件", "")
+    if shori in ("結合", "ハイフン付出力") and ("新たな項目として追加" in cond or "新たな項目として" in cond):
+        return True
+    return False
+
+
+def _extract_case_name(rows: list[dict], case_idx: int) -> str:
+    """Extract a human-readable title for a special case block."""
+    SUB_PURPOSES = {"契約形態の確認", "メールアドレスの情報を出力するため"}
+    for r in rows:
+        m = r.get("目的")
+        if m and m.strip() not in SUB_PURPOSES:
+            return m.strip().split("\n")[0]
+    for r in rows:
+        m = r.get("目的")
+        if m:
+            return m.strip().split("\n")[0]
+    for r in rows:
+        f = r.get("項目名")
+        if f:
+            return f.strip()
+    return f"Case_{case_idx}"
+
+
+def _group_case_sentences(case_items: list) -> list[dict]:
+    """
+    Lớp 2: Phân loại các rows bên trong 1 case thành các sentences.
+    - Tiền xử lý (Pre-processing/tạo cột đệm): Tách thành sentence riêng (Slice 2).
+    - Kế thừa ngữ cảnh (Context Inheritance): Nếu có các dòng 紐づけ chung cho nhiều cột output độc lập,
+      nhân bản các dòng 紐づけ vào từng sentence con tương ứng (Slice 3).
+    - Cây điều kiện (SWITCH/Branching): Gom các dòng điều kiện và output cùng trường vào 1 sentence.
+    - Ranh giới thị giác (Visual & Blank Delimiters): Tách sentence con khi đổi màu nền hoặc dòng trống + mục đích mới.
+    """
+    if not case_items:
+        return []
+
+    def _r(item):
+        return item["row_data"] if isinstance(item, dict) and "row_data" in item else item
+
+    if len(case_items) == 1:
+        return [{"type": "single", "rows": [_r(case_items[0])]}]
+
+    sentences = []
+
+    # 1. Tách các dòng tiền xử lý tạo cột đệm ở đầu case (Pre-processing separation)
+    idx = 0
+    while idx < len(case_items) and _is_special_prep_row(_r(case_items[idx])):
+        sentences.append({"type": "single", "rows": [_r(case_items[idx])]})
+        idx += 1
+
+    remaining = case_items[idx:]
+    if not remaining:
+        return sentences
+
+    # 2. Kiểm tra trường hợp Kế thừa ngữ cảnh (Context Inheritance):
+    # Các dòng 紐づけ đi kèm nhiều dòng output độc lập cho các trường đích khác nhau (không có 条件分岐 xen kẽ)
+    join_rows = []
+    i = 0
+    while i < len(remaining) and _r(remaining[i]).get("処理") == "紐づけ":
+        join_rows.append(_r(remaining[i]))
+        i += 1
+
+    output_rows = [_r(x) for x in remaining[i:]]
+    distinct_target_fields = set()
+    has_cond = any(r.get("処理") == "条件分岐" for r in output_rows)
+    all_simple_outputs = True
+
+    for r in output_rows:
+        sh = r.get("処理", "")
+        f = r.get("項目名", "")
+        if sh in ("そのまま出力", "出力", "固定値出力", "指定文字削除出力"):
+            if f:
+                distinct_target_fields.add(f)
+        else:
+            all_simple_outputs = False
+
+    if join_rows and len(output_rows) > 1 and len(distinct_target_fields) > 1 and not has_cond and all_simple_outputs:
+        # Context Inheritance: Nhân bản join_rows cho từng output riêng biệt
+        for out_r in output_rows:
+            sentences.append({"type": "grouped", "rows": join_rows + [out_r]})
+    else:
+        # Chuẩn gom nhóm cho cây điều kiện / single output
+        current_sentence_rows = []
+        seen_output = False
+        current_fill = None
+
+        for item in remaining:
+            r = _r(item)
+            f_col = item.get("fill_color") if isinstance(item, dict) and "row_data" in item else None
+            had_blank = item.get("had_blank_before", False) if isinstance(item, dict) and "row_data" in item else False
+            shori = r.get("処理", "")
+            is_out = _is_special_output_row(r)
+            has_mokuteki = bool(r.get("目的"))
+
+            # Check boundaries:
+            # 1. Join boundary
+            is_join_boundary = (seen_output and shori == "紐づけ")
+            # 2. Visual boundary: Color shift OR (Blank gap + New purpose)
+            is_color_shift = (seen_output and f_col and current_fill and f_col != current_fill)
+            is_blank_section = (seen_output and had_blank and has_mokuteki)
+
+            if is_join_boundary or is_color_shift or is_blank_section:
+                if current_sentence_rows:
+                    s_type = "single" if len(current_sentence_rows) == 1 else "grouped"
+                    sentences.append({"type": s_type, "rows": current_sentence_rows})
+                    current_sentence_rows = []
+                    seen_output = False
+                    current_fill = f_col
+
+            if current_fill is None and f_col is not None:
+                current_fill = f_col
+
+            current_sentence_rows.append(r)
+            if is_out:
+                seen_output = True
+
+        if current_sentence_rows:
+            s_type = "single" if len(current_sentence_rows) == 1 else "grouped"
+            sentences.append({"type": s_type, "rows": current_sentence_rows})
+
+    return sentences
+
+
 def _parse_special_processing_section(ws, kw_row: int) -> dict:
     """
     特殊処理:
@@ -399,9 +559,14 @@ def _parse_special_processing_section(ws, kw_row: int) -> dict:
       - Data から kw_row+2 以降
       - 50行連続で全列空なら停止
 
+    Cải tiến 2 lớp:
+      - Lớp 1 (Cases): Gom các ý theo từng dòng header phân tách thành các trường hợp đặc biệt riêng biệt (cases).
+      - Lớp 2 (Sentences): Trong mỗi case, phân loại thành các sentences dựa theo dòng output kèm điều kiện liên kết,
+        màu nền và dòng trống phân cách.
+
     Grey-row rules:
       - Nếu MỘT dòng bị tô xám → bỏ qua dòng đó (không thêm vào rows/block)
-      - Nếu TẤT CẢ dòng trong một sentence-block đều bị xám → bỏ qua cả block
+      - Nếu TẤT CẢ dòng trong một case đều bị xám → bỏ qua cả case
     """
     header_row = kw_row + 1
     col_headers: dict[int, str] = {}
@@ -410,18 +575,27 @@ def _parse_special_processing_section(ws, kw_row: int) -> dict:
         if h:
             col_headers[col] = h
 
-    # Values that indicate a repeated section keyword/header row to skip
     section_keywords_set = REQUIRED_KEYWORDS
     header_value_set = set(col_headers.values())
 
     data_start = header_row + 1
     max_row    = ws.max_row
 
-    # ── Pass 1: thu thập tất cả raw data rows kèm row-index và grey flag ──
-    raw_collected: list[dict] = []   # {"row_data": dict, "excel_row": int, "grey": bool}
+    # Kiểm tra xem sheet có nhiều dòng header lặp lại (như Contact_Table) hay không
+    pure_headers_count = 0
+    for r in range(data_start, max_row + 1):
+        v_e_chk = _cv(ws, r, COL_E)
+        v_f_chk = _cv(ws, r, COL_E + 1)
+        if v_e_chk == "項目名" and v_f_chk == "目的":
+            pure_headers_count += 1
+
+    has_multiple_headers = (pure_headers_count > 0)
+
+    # ── Pass 1: Thu thập raw data rows theo từng Case (phân tách bởi dòng header) ──
+    raw_collected: list[dict] = []
     empty_streak = 0
-    current_block_meta: list[dict] = []   # tạm chứa rows của block hiện tại
-    blocks_meta: list[list[dict]] = []    # danh sách các block
+    current_case_entries: list[dict] = []
+    cases_raw: list[list[dict]] = []
 
     for row in range(data_start, max_row + 1):
         row_data: dict = {}
@@ -439,72 +613,148 @@ def _parse_special_processing_section(ws, kw_row: int) -> dict:
                 break
             continue
 
-        # Skip rows that repeat the section keyword (e.g. another 特殊処理 header block)
-        e_val = _cv(ws, row, COL_E)
-        if e_val in section_keywords_set:
-            # We hit a new block! Save current block rows to blocks_meta
-            if current_block_meta:
-                blocks_meta.append(current_block_meta)
-                current_block_meta = []
+        had_blank_before = (empty_streak > 0)
+        empty_streak = 0
 
-            # This is a repeated section header — reset and re-detect headers
-            new_header_row = row + 1
-            col_headers = {}
-            for col in range(COL_E, COL_N + 1):
-                h = _cv(ws, new_header_row, col)
-                if h:
-                    col_headers[col] = h
-            header_value_set = set(col_headers.values())
-            empty_streak = 0
-            continue
-
-        # Skip rows that are header repetitions (all values match header names)
+        # Nhận diện dòng header phân tách
+        v_e = _cv(ws, row, COL_E)
+        v_f = _cv(ws, row, COL_E + 1)
         row_values = set(row_data.values())
-        if row_values and row_values.issubset(header_value_set):
+
+        # Kiểm tra xem dòng có chứa action keyword nghiệp vụ hay không (từ cột H trở đi)
+        ACTION_KEYWORDS = {
+            "そのまま出力", "出力", "固定値出力", "指定文字削除出力", "削除",
+            "条件分岐", "結合", "結合（条件付き）", "ハイフン付出力", "紐づけ", "重複チェック"
+        }
+        has_action = any(
+            _cv(ws, row, c) in ACTION_KEYWORDS
+            for c in range(COL_E + 3, COL_N + 1)
+        )
+
+        is_pure_header = (
+            (v_e in section_keywords_set
+             or (len(row_values) >= 2 and row_values.issubset(header_value_set))
+             or (v_e == "項目名" and v_f == "目的"))
+            and not has_action
+        )
+
+        is_hybrid_row = (v_e == "項目名" and v_f == "目的") and has_action
+
+        # Adaptive boundary cho các sheet không lặp lại header (ví dụ Account.xlsx):
+        # Tách case khi:
+        # 1. Có khoảng trống trước đó (had_blank_before) và dòng mới có 目的 (v_f) nhưng không có 項目名 (v_e)
+        # 2. Hoặc bước tiền xử lý chuyển đổi mục đích (ví dụ Row 39: 入居者情報作成に必要な項目の追加)
+        is_blank_case_boundary = False
+        if not has_multiple_headers and current_case_entries and not is_pure_header:
+            if had_blank_before and v_f and not v_e:
+                is_blank_case_boundary = True
+            elif v_f and not v_e and "追加" in str(v_f):
+                is_blank_case_boundary = True
+
+        if is_pure_header or is_blank_case_boundary:
+            # Gặp dòng header thuần túy hoặc ranh giới case -> Gom các ý phía trên thành 1 case
+            if current_case_entries:
+                cases_raw.append(current_case_entries)
+                current_case_entries = []
+
+            if is_pure_header:
+                # Nếu dòng header lặp lại keyword section, đọc lại header ở dòng kế tiếp
+                if v_e in section_keywords_set:
+                    new_header_row = row + 1
+                    col_headers = {}
+                    for col in range(COL_E, COL_N + 1):
+                        h = _cv(ws, new_header_row, col)
+                        if h:
+                            col_headers[col] = h
+                    header_value_set = set(col_headers.values())
+
+                empty_streak = 0
+                continue
+
+        c_e = ws.cell(row=row, column=COL_E)
+        c_f = ws.cell(row=row, column=COL_E + 1)
+        fill_color = _get_cell_fill_argb(c_e) or _get_cell_fill_argb(c_f)
+
+        if is_hybrid_row:
+            # Dòng chứa dữ liệu nhưng bị dính nhãn header ở cột E, F (ví dụ Row 119)
+            for dummy_k in ("項目名", "目的", "該当ファイル名", "開発用チェック"):
+                if row_data.get(dummy_k) == dummy_k:
+                    del row_data[dummy_k]
+            # Kế thừa trường đích của case nếu có
+            last_case_field = ""
+            for e in current_case_entries:
+                f_val = e["row_data"].get("項目名")
+                if f_val and f_val != "項目名":
+                    last_case_field = f_val
+            if last_case_field and not row_data.get("項目名"):
+                row_data["項目名"] = last_case_field
+
+            is_grey_row = _is_special_row_grey(ws, row)
+            entry = {
+                "row_data": row_data,
+                "excel_row": row,
+                "grey": is_grey_row,
+                "fill_color": fill_color,
+                "had_blank_before": had_blank_before,
+            }
+            raw_collected.append(entry)
+            current_case_entries.append(entry)
+            # Vì dòng này cũng đóng vai trò phân tách case phía trước với case phía sau
+            cases_raw.append(current_case_entries)
+            current_case_entries = []
             empty_streak = 0
             continue
 
         # Detect if this Excel row is grey
         is_grey_row = _is_special_row_grey(ws, row)
 
-        entry = {"row_data": row_data, "excel_row": row, "grey": is_grey_row}
+        entry = {
+            "row_data": row_data,
+            "excel_row": row,
+            "grey": is_grey_row,
+            "fill_color": fill_color,
+            "had_blank_before": had_blank_before,
+        }
         raw_collected.append(entry)
-        current_block_meta.append(entry)
+        current_case_entries.append(entry)
         empty_streak = 0
 
-    if current_block_meta:
-        blocks_meta.append(current_block_meta)
+    if current_case_entries:
+        cases_raw.append(current_case_entries)
 
-    # ── Pass 2: áp dụng grey rules ──
-    #
-    # Rule A: Nếu TẤT CẢ entries trong một block đều là grey → bỏ qua cả block
-    # Rule B: Nếu CHỈ MỘT SỐ entries trong block bị grey → giữ block nhưng
-    #         lọc bỏ các grey entries đó
-
+    # ── Pass 2: Áp dụng grey rules & phân loại 2 lớp ──
+    cases: list[dict] = []
     rows: list[dict] = []
     sentences: list[dict] = []
 
-    for block in blocks_meta:
-        all_grey = all(e["grey"] for e in block)
+    for idx, case_entries in enumerate(cases_raw, 1):
+        all_grey = all(e["grey"] for e in case_entries)
         if all_grey:
-            # Rule A — bỏ qua cả block
+            # Rule A — bỏ qua cả case nếu tất cả đều xám
             continue
 
         # Rule B — chỉ giữ lại các dòng không bị xám
-        visible_rows = [e["row_data"] for e in block if not e["grey"]]
-
-        if not visible_rows:
+        visible_entries = [e for e in case_entries if not e["grey"]]
+        if not visible_entries:
             continue
 
-        rows.extend(visible_rows)
-        sentences.append({
-            "type": "grouped",
+        visible_rows = [e["row_data"] for e in visible_entries]
+
+        case_sentences = _group_case_sentences(visible_entries)
+        case_name = _extract_case_name(visible_rows, idx)
+
+        cases.append({
+            "case_index": idx,
+            "case_name": case_name,
             "rows": visible_rows,
+            "sentences": case_sentences,
         })
+
+        sentences.extend(case_sentences)
 
     return {
         "headers": {str(c): h for c, h in col_headers.items()},
-        "rows": rows,
+        "cases": cases,
         "sentences": sentences,
     }
 
@@ -524,7 +774,7 @@ def parse_sheet(ws) -> dict | None:
         return None
 
     row_fn,  col_fn  = kw_map["ファイル名"]
-    row_out, _       = kw_map["出力条件"]
+    row_out, col_out = kw_map["出力条件"]
     row_nor, _       = kw_map["通常処理"]
     row_spe, _       = kw_map["特殊処理"]
 
@@ -534,7 +784,7 @@ def parse_sheet(ws) -> dict | None:
 
     return {
         "ファイル名": _parse_filename_section(ws, row_fn, col_fn, filename_stop),
-        "出力条件":   _parse_output_condition_section(ws, row_out, row_nor),
+        "出力条件":   _parse_output_condition_section(ws, row_out, col_out, row_nor),
         "通常処理":   _parse_normal_processing_section(ws, row_nor, row_spe),
         "特殊処理":   _parse_special_processing_section(ws, row_spe),
     }
